@@ -52,7 +52,7 @@ Everything detected can be overridden in the **Data → Column mapping** panel. 
 - **Today marker:** show or hide, label, colour, date override.
 - **Colours:** palettes (Executive, Muted, Vibrant, Ocean, Slate), colour by status with a legend, background, text and gridline colours.
 
-Settings (not data) are remembered in your browser's local storage. **Reset all settings** clears them.
+Layout and colour preferences are remembered in your browser's local storage. Nothing from your file is stored there, including the title, workstream names and per-workstream colours. **Reset all settings** clears the saved preferences.
 
 ### Label readability
 
@@ -122,4 +122,5 @@ The smoke test opens `index.html` from disk, loads every sample, renders each pr
 
 - Nothing is uploaded: files are read with the browser's `FileReader` and processed in memory.
 - The page's CSP blocks `fetch`/XHR/WebSocket (`connect-src 'none'`) and external scripts.
-- Only your display settings are saved in local storage. File contents are never stored.
+- Only layout and colour preferences are saved in local storage. Nothing from your file is stored, including the title and workstream names. Saved values are validated when loaded, so tampered storage can't inject content into the page.
+- A security review is in `docs/SECURITY.md`.

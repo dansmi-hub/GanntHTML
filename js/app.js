@@ -9,6 +9,9 @@
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
   const STORAGE_KEY = 'roadmap-studio.style.v1';
+  // Validation for saved settings (declared before state, which loads them)
+  const HEX = /^#[0-9a-f]{6}$/i;
+  const SAFE_TEXT = /^[\w\s,.:#-]*$/; // no quotes, angle brackets or ampersands
 
   const ROLE_LABELS = {
     workstream: 'Workstream', name: 'Activity', timeline: 'Timeline',
@@ -31,13 +34,45 @@
   };
 
   /* ---------------------------------------------------------------- */
-  /* Persistence (settings only — never file contents)                 */
+  /* Persistence: layout/colour preferences only. Anything derived from  */
+  /* the file (title, workstream names, their order/visibility/colours)  */
+  /* is never written to browser storage.                                */
   /* ---------------------------------------------------------------- */
+  /**
+   * Accept only keys that exist in the defaults, with the same type. Colours must be
+   * #rrggbb and other strings plain text, so tampered storage (e.g. written by another
+   * app on the same host) can't inject markup into the SVG.
+   */
+  function sanitize(saved, def) {
+    const out = {};
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return out;
+    for (const k of Object.keys(def)) {
+      if (!Object.prototype.hasOwnProperty.call(saved, k)) continue;
+      const d = def[k], v = saved[k];
+      if (d && typeof d === 'object' && !Array.isArray(d)) out[k] = sanitize(v, d);
+      else if (typeof d === 'number') { if (typeof v === 'number' && isFinite(v)) out[k] = v; }
+      else if (typeof d === 'boolean') { if (typeof v === 'boolean') out[k] = v; }
+      else if (typeof d === 'string' && typeof v === 'string' && v.length <= 120) {
+        if (HEX.test(d) ? HEX.test(v) : SAFE_TEXT.test(v)) out[k] = v;
+      }
+    }
+    return out;
+  }
+
+  function persistable(style) {
+    const s = U.clone(style);
+    delete s.order;
+    delete s.hidden;
+    if (s.canvas) delete s.canvas.title;
+    if (s.colours) delete s.colours.overrides;
+    return s;
+  }
+
   function loadStyle() {
     const base = RM.presets.apply('powerpoint', RM.presets.DEFAULT_STYLE);
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-      if (saved) return U.deepMerge(base, saved);
+      if (saved) return U.deepMerge(base, sanitize(persistable(saved), RM.presets.DEFAULT_STYLE));
     } catch (e) { /* ignore */ }
     return base;
   }
@@ -45,7 +80,7 @@
   function saveStyle() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.style)); } catch (e) { /* ignore */ }
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(persistable(state.style))); } catch (e) { /* ignore */ }
     }, 300);
   }
 
