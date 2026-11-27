@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Privacy: block all network requests from this page. Data never leaves the browser. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
+  <title>Roadmap Studio</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="1" y="3" width="12" height="4" rx="2" fill="#1F4E79"/><rect x="6" y="9" width="14" height="4" rx="2" fill="#2A9D8F"/><rect x="3" y="15" width="9" height="4" rx="2" fill="#6A4C93"/></svg>
+      <span>Roadmap Studio</span>
+      <span class="badge" title="Files are parsed in your browser. This page blocks all network requests.">Processed locally · nothing uploaded</span>
+    </div>
+    <div class="presets" id="presetBar" role="group" aria-label="Preset"></div>
+    <div class="exports">
+      <label class="inline">Scale
+        <select id="pngScale">
+          <option value="1">1×</option>
+          <option value="2">2×</option>
+          <option value="3" selected>3×</option>
+          <option value="4">4×</option>
+        </select>
+      </label>
+      <button id="btnPng" class="primary" disabled>Export PNG</button>
+      <button id="btnSvg" disabled>Export SVG</button>
+      <button id="btnCopy" disabled title="Copy PNG to clipboard, then paste into PowerPoint">Copy</button>
+    </div>
+  </header>
+
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <!-- DATA -->
+      <details open>
+        <summary>Data</summary>
+        <div class="dropzone" id="dropzone" tabindex="0">
+          <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt" hidden>
+          <strong>Drop a monday.com export</strong>
+          <span>or <u>choose a file</u> (.xlsx, .xls, .csv)</span>
+        </div>
+        <button id="btnSample" class="link">Try with sample data</button>
+        <div id="fileInfo" class="info" hidden></div>
+        <div id="dataControls" hidden>
+          <label>Sheet <select id="sheetSelect"></select></label>
+          <label>Format <select id="adapterSelect"></select></label>
+          <div class="subhead">Column mapping <span class="hint">(auto-detected — adjust if needed)</span></div>
+          <div class="mapping" id="mapping"></div>
+          <label>Ambiguous dates
+            <select id="datePref">
+              <option value="dmy">DD/MM/YYYY (UK)</option>
+              <option value="mdy">MM/DD/YYYY (US)</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="singleDayMs" checked> Treat single-day items as milestones</label>
+          <label>Subitems
+            <select id="subitemsMode">
+              <option value="auto">Auto (show where the parent has no dates)</option>
+              <option value="always">Always show</option>
+              <option value="never">Hide</option>
+            </select>
+          </label>
+          <details class="inner">
+            <summary>Preview of the data read</summary>
+            <p class="hint">First rows as understood by the app. Highlighted columns are used for the chart.</p>
+            <div id="tablePreview" class="tablePreview"></div>
+          </details>
+        </div>
+      </details>
+
+      <!-- LAYOUT -->
+      <details open>
+        <summary>Layout</summary>
+        <label>Canvas
+          <select data-bind="canvas.mode">
+            <option value="slide">16:9 slide (1920×1080)</option>
+            <option value="auto">Auto height</option>
+          </select>
+        </label>
+        <label data-show="canvas.mode=auto">Width (px) <input type="number" min="800" max="6000" step="10" data-bind="canvas.width"></label>
+        <label data-show="canvas.mode=slide" class="range">Title space <input type="range" min="0" max="30" step="1" data-bind="canvas.titleSpace"><output data-unit="%"></output></label>
+        <label data-show="canvas.mode=slide" class="check"><input type="checkbox" data-bind="canvas.fit"> Fit content to slide</label>
+        <label data-show="canvas.mode=slide" class="check"><input type="checkbox" data-bind="canvas.showTitleGuide"> Show title-area guide (preview only)</label>
+        <label class="check"><input type="checkbox" data-bind="canvas.showTitle"> Include a title in the image</label>
+        <label data-show="canvas.showTitle=true">Title <input type="text" data-bind="canvas.title" placeholder="Programme roadmap"></label>
+        <label>Font
+          <select data-bind="fontFamily">
+            <option value="Segoe UI, Helvetica Neue, Arial, sans-serif">Segoe UI / Helvetica</option>
+            <option value="Calibri, Carlito, Arial, sans-serif">Calibri</option>
+            <option value="Arial, Helvetica, sans-serif">Arial</option>
+            <option value="Aptos, Segoe UI, Arial, sans-serif">Aptos</option>
+            <option value="Georgia, Times New Roman, serif">Georgia</option>
+          </select>
+        </label>
+        <label class="range">Font size <input type="range" min="9" max="26" step="1" data-bind="fontSize"><output data-unit="px"></output></label>
+        <label class="range">Row height <input type="range" min="16" max="64" step="1" data-bind="rowHeight"><output data-unit="px"></output></label>
+        <label class="range">Bar thickness <input type="range" min="25" max="95" step="1" data-bind="barThickness"><output data-unit="%"></output></label>
+        <label class="range">Workstream spacing <input type="range" min="0" max="48" step="1" data-bind="workstreamGap"><output data-unit="px"></output></label>
+        <label class="range">Margin <input type="range" min="12" max="120" step="2" data-bind="canvas.padding"><output data-unit="px"></output></label>
+        <label>Rows
+          <select data-bind="packing">
+            <option value="compact">Compact (share rows where possible)</option>
+            <option value="single">One activity per row</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" data-bind="sortByStart"> Sort activities by start date</label>
+        <div id="fitInfo" class="hint"></div>
+      </details>
+
+      <!-- WORKSTREAMS -->
+      <details open>
+        <summary>Workstreams</summary>
+        <label>Heading style
+          <select data-bind="workstream.style">
+            <option value="band">Coloured band on the left</option>
+            <option value="header">Centred heading row</option>
+          </select>
+        </label>
+        <label data-show="workstream.style=band" class="range">Band width <input type="range" min="100" max="420" step="5" data-bind="workstream.width"><output data-unit="px"></output></label>
+        <label class="range">Heading size <input type="range" min="9" max="28" step="1" data-bind="workstream.fontSize"><output data-unit="px"></output></label>
+        <label class="check"><input type="checkbox" data-bind="workstream.stripes"> Tinted workstream rows</label>
+        <div class="wslist" id="wsList"><p class="hint">Load data to show, hide, reorder and recolour workstreams.</p></div>
+      </details>
+
+      <!-- TIMELINE -->
+      <details>
+        <summary>Date range &amp; timescale</summary>
+        <label>Range
+          <select data-bind="range.mode">
+            <option value="auto">Automatic (fit to data)</option>
+            <option value="custom">Custom months</option>
+          </select>
+        </label>
+        <div class="row2" data-show="range.mode=custom">
+          <label>From <input type="month" data-bind="range.start"></label>
+          <label>To <input type="month" data-bind="range.end"></label>
+        </div>
+        <label>Timescale
+          <select data-bind="timescale">
+            <option value="auto">Automatic</option>
+            <option value="weeks">Weeks</option>
+            <option value="months">Months</option>
+            <option value="quarters">Quarters</option>
+          </select>
+        </label>
+      </details>
+
+      <!-- LABELS -->
+      <details>
+        <summary>Labels</summary>
+        <label class="check"><input type="checkbox" data-bind="labels.activities"> Activity labels</label>
+        <label data-show="labels.activities=true">Label position
+          <select data-bind="labels.position">
+            <option value="auto">Auto (inside if it fits, else beside)</option>
+            <option value="beside">Always beside the bar</option>
+            <option value="inside">Always inside (truncate)</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" data-bind="labels.dates"> Show dates on activities</label>
+        <label class="check"><input type="checkbox" data-bind="labels.milestones"> Milestone labels</label>
+        <label class="check"><input type="checkbox" data-bind="labels.milestoneDates"> Show dates on milestones</label>
+      </details>
+
+      <!-- MILESTONES -->
+      <details>
+        <summary>Milestones</summary>
+        <label class="check"><input type="checkbox" data-bind="milestones.show"> Show milestones</label>
+        <label>Placement
+          <select data-bind="milestones.placement">
+            <option value="inline">Within each workstream</option>
+            <option value="top">Key milestones row at top</option>
+          </select>
+        </label>
+        <label class="range">Size <input type="range" min="8" max="30" step="1" data-bind="milestones.size"><output data-unit="px"></output></label>
+        <label class="check"><input type="checkbox" data-bind="milestones.useWorkstreamColour"> Use workstream colour</label>
+        <label class="colour" data-show="milestones.useWorkstreamColour=false">Colour <input type="color" data-bind="milestones.colour"></label>
+      </details>
+
+      <!-- TODAY -->
+      <details>
+        <summary>Today marker</summary>
+        <label class="check"><input type="checkbox" data-bind="today.show"> Show today marker</label>
+        <label class="check"><input type="checkbox" data-bind="today.label"> “Today” label</label>
+        <label class="colour">Colour <input type="color" data-bind="today.colour"></label>
+        <label>Date override <input type="date" data-bind="today.date"></label>
+      </details>
+
+      <!-- COLOURS -->
+      <details>
+        <summary>Colours</summary>
+        <label>Palette <select data-bind="colours.palette" id="paletteSelect"></select></label>
+        <label class="check"><input type="checkbox" data-bind="colours.byStatus"> Colour bars by status</label>
+        <label class="colour">Background <input type="color" data-bind="colours.background"></label>
+        <label class="colour">Text <input type="color" data-bind="colours.text"></label>
+        <label class="colour">Secondary text <input type="color" data-bind="colours.muted"></label>
+        <label class="colour">Gridlines <input type="color" data-bind="colours.grid"></label>
+        <button id="btnResetColours" class="link">Reset workstream colours</button>
+      </details>
+
+      <div class="foot">
+        <button id="btnReset" class="link">Reset all settings</button>
+      </div>
+    </aside>
+
+    <main class="stage" id="stage">
+      <div id="warnings" class="warnings" hidden></div>
+      <div class="canvasWrap" id="canvasWrap">
+        <div id="empty" class="empty">
+          <div class="emptyCard">
+            <h2>Turn a monday.com export into a presentation-ready roadmap</h2>
+            <ol>
+              <li>In monday.com, open your board or Gantt view and choose <em>Export to Excel</em> (or CSV).</li>
+              <li>Drop the file anywhere on this page.</li>
+              <li>Pick a preset, fine-tune, and export PNG or SVG.</li>
+            </ol>
+            <p class="hint">Your file is read in this browser tab only. The page blocks all network access.</p>
+            <button id="btnSample2" class="primary">Try with sample data</button>
+          </div>
+        </div>
+        <div id="diag" class="empty" hidden>
+          <div class="emptyCard">
+            <h2>The file was read, but nothing could be plotted</h2>
+            <p id="diagReason"></p>
+            <p class="hint">What the app found (column titles and a few date values only, no activity names):</p>
+            <pre id="diagText" class="diagText"></pre>
+            <button id="btnCopyDiag">Copy these details</button>
+          </div>
+        </div>
+        <div id="preview" class="preview" hidden></div>
+      </div>
+    </main>
+  </div>
+
+  <div id="dropOverlay" class="dropOverlay" hidden><div>Drop to load</div></div>
+  <div id="toast" class="toast" hidden></div>
+
+  <!-- Libraries (bundled locally) -->
+  <script src="vendor/xlsx.full.min.js"></script>
+  <!-- Core -->
+  <script src="js/core/util.js"></script>
+  <script src="js/core/reader.js"></script>
+  <script src="js/core/mapping.js"></script>
+  <script src="js/core/loader.js"></script>
+  <!-- Format adapters: add new monday.com/other export formats here -->
+  <script src="js/adapters/registry.js"></script>
+  <script src="js/adapters/monday-board.js"></script>
+  <script src="js/adapters/generic-table.js"></script>
+  <!-- Presets: add new styling presets here -->
+  <script src="js/presets/presets.js"></script>
+  <!-- Rendering & export -->
+  <script src="js/render/roadmap-svg.js"></script>
+  <script src="js/export/exporter.js"></script>
+  <!-- Sample + app -->
+  <script src="samples/sample-data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+Name,Group,Owner,Status,Start Date,End Date,Type
+Programme mobilisation,Strategy & Governance,A. Patel,Done,01/07/2026,04/08/2026,Task
+Business case approved,Strategy & Governance,A. Patel,Done,15/08/2026,15/08/2026,Milestone
+Benefits realisation framework,Strategy & Governance,J. Okafor,Working on it,20/08/2026,28/11/2026,Task
+Quarterly steering reviews,Strategy & Governance,A. Patel,Working on it,29/09/2026,27/05/2027,Task
+Cloud landing zone,Platform Modernisation,R. Chen,Done,21/07/2026,04/10/2026,Task
+Legacy CRM migration,Platform Modernisation,R. Chen,Working on it,19/09/2026,16/02/2027,Task
+API gateway,Platform Modernisation,S. Novak,Stuck,19/10/2026,23/12/2026,Task
+Platform go-live,Platform Modernisation,R. Chen,Not Started,21/02/2027,21/02/2027,Milestone
+Decommission legacy estate,Platform Modernisation,S. Novak,Not Started,26/02/2027,27/05/2027,Task
+Data strategy,Data & Analytics,M. Silva,Done,11/07/2026,30/08/2026,Task
+Enterprise data warehouse,Data & Analytics,M. Silva,Working on it,09/09/2026,27/01/2027,Task
+Self-service reporting pilot,Data & Analytics,K. Ahmed,Not Started,28/12/2026,08/03/2027,Task
+Executive KPI dashboard live,Data & Analytics,K. Ahmed,Not Started,18/03/2027,18/03/2027,Milestone
+Data governance council,Data & Analytics,M. Silva,,,,Task
+Customer journey mapping,Customer Experience,E. Walsh,Done,06/07/2026,10/08/2026,Task
+New customer portal (MVP),Customer Experience,E. Walsh,Working on it,30/08/2026,28/12/2026,Task
+Portal beta launch,Customer Experience,E. Walsh,Not Started,02/01/2027,02/01/2027,Milestone
+Mobile app redesign and accessibility uplift,Customer Experience,T. Brooks,Not Started,17/01/2027,17/05/2027,Task
+Change impact assessment,People & Change,H. Kim,Done,31/07/2026,09/09/2026,Task
+Training programme,People & Change,H. Kim,Working on it,28/11/2026,18/03/2027,Task
+Comms & engagement,People & Change,D. Evans,Working on it,10/08/2026,27/05/2027,Task
+Operating model sign-off,People & Change,D. Evans,Not Started,28/03/2027,28/03/2027,Milestone
