@@ -123,7 +123,15 @@
         <label class="check"><input type="checkbox" data-bind="workstream.stripes"> Tinted workstream rows</label>
         <div class="subhead">Items with subitems</div>
         <label class="check"><input type="checkbox" data-bind="groups.summaryLine"> Summary line spanning the subitems</label>
-        <label class="check"><input type="checkbox" data-bind="groups.panel"> Outline the group</label>
+        <label>Group style
+          <select data-bind="groups.style">
+            <option value="outline">Outline around the group</option>
+            <option value="connectors">Connector lines (tree)</option>
+            <option value="rail">Side rail in the margin</option>
+            <option value="band">Shaded band behind the rows</option>
+            <option value="none">None (summary line only)</option>
+          </select>
+        </label>
         <div class="wslist" id="wsList"><p class="hint">Load data to show, hide, reorder and recolour workstreams.</p></div>
       </details>
 

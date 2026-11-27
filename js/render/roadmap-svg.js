@@ -213,7 +213,12 @@
       }
     });
     const grouping = style.groups || {};
-    const panelPad = grouping.panel ? Math.max(4, fs * 0.45) : 0;
+    const gstyle = groupStyle(style);
+    // Room around a group: the outline needs a margin, connector lines need room for their trunk
+    const padL = gstyle === 'outline' ? Math.max(4, fs * 0.45) : gstyle === 'connectors' ? Math.max(10, fs * 0.9) : 0;
+    const padR = gstyle === 'outline' ? Math.max(4, fs * 0.45) : 0;
+    // Shaded band and side rail mark whole rows, so a group gets its rows to itself
+    const exclusive = gstyle === 'band' || gstyle === 'rail';
     const units = [];
     const families = [];
     const inFamily = new Set();
@@ -255,8 +260,9 @@
     const fits = (lane, left) => laneRight[lane] === undefined || laneRight[lane] + sep <= left;
     let next = 0; // for one-per-row packing
     for (const u of units) {
-      const left = Math.min(...u.members.map((m) => m.g.left)) - panelPad;
-      const right = Math.max(...u.members.map((m) => m.g.right)) + panelPad;
+      const left = Math.min(...u.members.map((m) => m.g.left)) - padL;
+      const right = Math.max(...u.members.map((m) => m.g.right)) + padR;
+      const own = !!(u.family && exclusive);
       // Lanes within the unit: parent on the first, subitems below it
       const inner = [];
       if (u.family) {
@@ -276,16 +282,27 @@
         L = 0;
         while (true) {
           let ok = true;
-          for (let j = L; j < L + h; j++) if (!fits(j, left)) { ok = false; break; }
+          for (let j = L; j < L + h; j++) if (own ? laneRight[j] !== undefined : !fits(j, left)) { ok = false; break; }
           if (ok) break;
           L++;
         }
       }
-      for (let j = L; j < L + h; j++) laneRight[j] = Math.max(laneRight[j] === undefined ? -Infinity : laneRight[j], right);
+      for (let j = L; j < L + h; j++) laneRight[j] = own ? Infinity : Math.max(laneRight[j] === undefined ? -Infinity : laneRight[j], right);
       u.members.forEach((m, k) => { m.g.lane = L + inner[k]; });
-      if (u.family) Object.assign(u.family, { lane: L, lanes: h, left, right });
+      if (u.family) {
+        // Connector trunk sits just left of the group's leftmost point
+        const trunkX = Math.min(...u.members.map((m) => m.g.left)) - padL * 0.55;
+        Object.assign(u.family, { lane: L, lanes: h, left, right, trunkX });
+      }
     }
     return { lanes: Math.max(1, laneRight.length, next), families };
+  }
+
+  /** How a parent item and its subitems are tied together visually. */
+  function groupStyle(style) {
+    const g = style.groups || {};
+    if (g.style) return g.style;
+    return g.panel === false ? 'none' : 'outline';
   }
 
   function computeLayout(model, style, fs, rowH) {
@@ -295,7 +312,8 @@
     const P = style.canvas.padding;
     const band = style.workstream.style === 'band';
     const bandW = band ? style.workstream.width : 0;
-    const x0 = P + (band ? bandW + 14 : 0);
+    // A side rail for subitem groups needs a little room left of the chart
+    const x0 = P + (band ? bandW + 14 : 0) + (groupStyle(style) === 'rail' ? 10 : 0);
     const x1 = W - P;
     const range = resolveRange(model, style);
     const span = range.end - range.start;
@@ -426,6 +444,7 @@
     const lanesTop = (b) => b.y + b.headerH + L.innerPad + (b.h - b.headerH - L.innerPad * 2 - b.lanes * L.rowH) / 2;
     const rowBgOf = (b) => (style.workstream.stripes ? U.mix(b.colour, bg, b.isKey ? 0.95 : 0.92) : bg);
     const groupPanelFill = (b) => U.mix(rowBgOf(b), bg, 0.8);
+    const groupBandFill = (b, c) => U.mix(c, rowBgOf(b), 0.84);
 
     out.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${U.esc(family)}">`);
     out.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="${bg}"/>`);
@@ -496,12 +515,20 @@
     }
 
     // Group panels (parent item + subitems): under gridlines and the today marker
-    if (style.groups && style.groups.panel) {
-      for (const b of L.blocks) {
-        for (const f of b.families || []) {
-          const y0 = lanesTop(b) + f.lane * L.rowH + L.rowH * 0.06, h = f.lanes * L.rowH - L.rowH * 0.12;
+    const gstyle = groupStyle(style);
+    for (const b of L.blocks) {
+      for (const f of b.families || []) {
+        const y0 = lanesTop(b) + f.lane * L.rowH, h = f.lanes * L.rowH;
+        const fc = f.parent.wsColour;
+        if (gstyle === 'outline') {
           const xa = Math.max(f.left, L.x0 - 4), xb = Math.min(f.right, L.x1 + 4);
-          out.push(`<rect x="${f1(xa)}" y="${f1(y0)}" width="${f1(xb - xa)}" height="${f1(h)}" rx="${f1(Math.min(8, L.rowH * 0.3))}" fill="${groupPanelFill(b)}" stroke="${U.mix(f.parent.wsColour, bg, 0.6)}" stroke-width="1"/>`);
+          out.push(`<rect x="${f1(xa)}" y="${f1(y0 + L.rowH * 0.06)}" width="${f1(xb - xa)}" height="${f1(h - L.rowH * 0.12)}" rx="${f1(Math.min(8, L.rowH * 0.3))}" fill="${groupPanelFill(b)}" stroke="${U.mix(fc, bg, 0.6)}" stroke-width="1"/>`);
+        } else if (gstyle === 'band') {
+          const xa = L.band ? L.x0 - 6 : L.x0;
+          out.push(`<rect x="${f1(xa)}" y="${f1(y0 + L.rowH * 0.04)}" width="${f1(L.x1 - xa)}" height="${f1(h - L.rowH * 0.08)}" rx="4" fill="${groupBandFill(b, fc)}"/>`);
+        } else if (gstyle === 'rail') {
+          const inset = Math.min(L.rowH * 0.2, 6);
+          out.push(`<rect x="${f1(L.x0 - 12)}" y="${f1(y0 + inset)}" width="4" height="${f1(h - inset * 2)}" rx="2" fill="${U.mix(fc, bg, 0.25)}"/>`);
         }
       }
     }
@@ -553,8 +580,24 @@
       const labelBg = new Map(); // item id -> colour behind its label
       // Group panels (parent + subitems) and summary lines, drawn under the bars
       for (const f of b.families || []) {
-        if (style.groups && style.groups.panel) {
-          [f.parent].concat(f.children).forEach((m) => labelBg.set(m.id, groupPanelFill(b)));
+        if (gstyle === 'outline' || gstyle === 'band') {
+          const fill = gstyle === 'outline' ? groupPanelFill(b) : groupBandFill(b, f.parent.wsColour);
+          [f.parent].concat(f.children).forEach((m) => labelBg.set(m.id, fill));
+        }
+        if (gstyle === 'connectors') {
+          // Tree lines: a trunk from the parent's row down to the last subitem, an elbow into each
+          const lc = U.mix(f.parent.wsColour, bg, 0.45);
+          // One elbow per row, into the row's first item, so no line crosses a bar
+          const firstInLane = new Map();
+          [f.parent].concat(f.children).forEach((m) => {
+            const cur = firstInLane.get(m.g.lane);
+            if (!cur || m.g.left < cur.g.left) firstInLane.set(m.g.lane, m);
+          });
+          const lanes = Array.from(firstInLane.keys()).sort((a, b2) => a - b2);
+          const yOf = (lane) => laneY(lane) + L.rowH / 2;
+          const paths = [`M${f1(f.trunkX)} ${f1(yOf(lanes.at(0)))}V${f1(yOf(lanes.at(-1)))}`];
+          lanes.forEach((lane) => paths.push(`M${f1(f.trunkX)} ${f1(yOf(lane))}H${f1(firstInLane.get(lane).g.left - 2)}`));
+          out.push(`<path d="${paths.join('')}" fill="none" stroke="${lc}" stroke-width="1.25" stroke-linecap="round"/>`);
         }
         if (f.showLine) {
           // Summary bracket: thin bar across the whole group with small end ticks

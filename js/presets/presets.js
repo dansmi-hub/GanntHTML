@@ -85,7 +85,7 @@
     },
     groups: {                 // parent item + its subitems
       summaryLine: true,      // thin bracket on the parent row spanning all its subitems
-      panel: true,            // light outlined panel around the group
+      style: 'outline',       // 'outline' | 'connectors' | 'rail' | 'band' | 'none'
     },
     hidden: {},               // workstream name -> true
     order: [],                // workstream names, user ordering
