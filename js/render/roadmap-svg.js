@@ -20,6 +20,16 @@
       const e = U.dayFromMonthKey(style.range.end);
       end = e !== null ? U.addMonths(e, 1) : null;
     }
+    if (start === null && end === null && model.minDay !== null && model.maxDay - model.minDay <= 120) {
+      // Short programme: snap to whole weeks (Monday to Monday) rather than whole months,
+      // otherwise a three-week plan is squashed into a fraction of the width.
+      start = model.minDay - ((U.ymd(model.minDay).dow + 6) % 7);
+      end = model.maxDay + 1;
+      end += (8 - U.ymd(end).dow) % 7;           // next Monday (or same day if already Monday)
+      if (end - (model.maxDay + 1) < 3) end += 7; // leave room for labels/milestones at the right edge
+      while (end - start < 21) end += 7;
+      return { start, end };
+    }
     if (start === null) start = model.minDay !== null ? U.startOfMonth(model.minDay) : U.startOfMonth(U.todayDay());
     if (end === null) end = model.maxDay !== null ? U.addMonths(U.startOfMonth(model.maxDay), 1) : U.addMonths(start, 6);
     if (end <= start) end = U.addMonths(start, 1);
@@ -66,7 +76,8 @@
       while (d < range.end) {
         const e = Math.min(next, range.end);
         const { d: dd } = U.ymd(d);
-        weekCells.push({ start: d, end: e, labels: [String(dd)] });
+        const mon = U.MONTH_LABELS[U.ymd(d).m - 1];
+        weekCells.push({ start: d, end: e, labels: [`${dd} ${mon}`, String(dd)] });
         d = e; next = d + 7;
       }
       return { scale, tiers: [monthCells.map((c) => ({ ...c, labels: [c.long, c.labels[0], c.labels[1]] })), weekCells] };
@@ -98,6 +109,27 @@
     const order = (style.order || []).filter((n) => names.includes(n));
     names.forEach((n) => { if (!order.includes(n)) order.push(n); });
     return order.map((n) => model.workstreams.find((w) => w.name === n));
+  }
+
+  /**
+   * Keep subitems directly beneath their parent item. Parents (and subitems whose
+   * parent isn't plotted) are optionally sorted by start date; children likewise.
+   */
+  function orderItems(items, byStart) {
+    const cmp = (a, b) => a.start - b.start || a.end - b.end;
+    const ids = new Set(items.map((i) => i.id));
+    const top = items.filter((i) => !i.isSub || !ids.has(i.parentId));
+    const kids = new Map();
+    items.forEach((i) => {
+      if (i.isSub && ids.has(i.parentId)) {
+        if (!kids.has(i.parentId)) kids.set(i.parentId, []);
+        kids.get(i.parentId).push(i);
+      }
+    });
+    if (byStart) { top.sort(cmp); kids.forEach((k) => k.sort(cmp)); }
+    const out = [];
+    top.forEach((i) => { out.push(i); (kids.get(i.id) || []).forEach((k) => out.push(k)); });
+    return out;
   }
 
   function itemLabel(it, style) {
@@ -226,7 +258,7 @@
         items = items.filter((it) => !it.milestone);
       }
       items = items.map((it) => ({ ...it, wsColour: colour }));
-      if (style.sortByStart) items.sort((a, b) => a.start - b.start || a.end - b.end);
+      items = orderItems(items, style.sortByStart);
       blocks.push({ name: ws.name, colour, items });
     });
     if (keyMilestones.length) {
@@ -421,7 +453,16 @@
     const barFrac = U.clamp(style.barThickness / 100, 0.2, 0.95);
     const lfs = fs;
     const legend = new Map();
+    // Labels beside a bar sit on a small backing panel in the row colour, so gridlines
+    // and the today marker never run through the text.
+    const backedLabel = (lbl, cy, rowBg) => {
+      const tw = U.textWidth(lbl.text, lfs, family, 500);
+      const x = lbl.anchor === 'end' ? lbl.x - tw - 2 : lbl.x - 2;
+      out.push(`<rect x="${f1(x)}" y="${f1(cy - lfs * 0.62)}" width="${f1(tw + 4)}" height="${f1(lfs * 1.24)}" fill="${rowBg}"/>`);
+      out.push(text(lbl.x, base(cy), lbl.text, { 'font-size': f1(lfs), 'font-weight': 500, fill: ink, 'text-anchor': lbl.anchor }));
+    };
     for (const b of L.blocks) {
+      const rowBg = style.workstream.stripes ? U.mix(b.colour, bg, b.isKey ? 0.95 : 0.92) : bg;
       const top = b.y + b.headerH + L.innerPad;
       // Vertically centre the lanes inside the block (block may be taller because of a wrapped title)
       const lanesH = b.lanes * L.rowH;
@@ -441,18 +482,20 @@
           if (U.contrastRatio(mc, bg) < 2) mc = ink; // never let a diamond vanish into the background
           const s = g.size / 2;
           out.push(`<path d="M${f1(g.cx)} ${f1(cy - s)} L${f1(g.cx + s)} ${f1(cy)} L${f1(g.cx)} ${f1(cy + s)} L${f1(g.cx - s)} ${f1(cy)} Z" fill="${mc}" stroke="${bg}" stroke-width="1.5"/>`);
-          if (g.label) out.push(text(g.label.x, base(cy), g.label.text, { 'font-size': f1(lfs), 'font-weight': 500, fill: ink, 'text-anchor': g.label.anchor }));
+          if (g.label) backedLabel(g.label, cy, rowBg);
           continue;
         }
 
         // Cap bar thickness so auto-fit's taller rows add breathing space, not chunky bars
-        const bh = Math.max(4, Math.min(L.rowH * barFrac, style.rowHeight * barFrac * 1.25, fs * 2.2));
+        let bh = Math.max(4, Math.min(L.rowH * barFrac, style.rowHeight * barFrac * 1.25, fs * 2.2));
+        if (it.isSub) bh = Math.max(4, bh * 0.8); // subitems: slightly slimmer and lighter than their parent
         const r = Math.min(bh / 2, Math.max(2, bh * 0.28));
         out.push(`<rect x="${f1(g.x)}" y="${f1(cy - bh / 2)}" width="${f1(g.w)}" height="${f1(bh)}" rx="${f1(r)}" fill="${colour}"/>`);
         if (g.label) {
           // Inside: contrast against the bar. Outside: page ink colour, never white-on-white.
-          const fill = g.label.inside ? U.readableOn(colour, '#111827', '#FFFFFF') : ink;
-          out.push(text(g.label.x, base(cy), g.label.text, { 'font-size': f1(lfs), 'font-weight': 500, fill, 'text-anchor': g.label.anchor }));
+          if (g.label.inside) {
+            out.push(text(g.label.x, base(cy), g.label.text, { 'font-size': f1(lfs), 'font-weight': 500, fill: U.readableOn(colour, '#111827', '#FFFFFF'), 'text-anchor': g.label.anchor }));
+          } else backedLabel(g.label, cy, rowBg);
         }
       }
     }

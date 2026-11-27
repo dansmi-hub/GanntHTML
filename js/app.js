@@ -12,7 +12,7 @@
 
   const ROLE_LABELS = {
     workstream: 'Workstream', name: 'Activity', timeline: 'Timeline',
-    start: 'Start date', end: 'End date', milestone: 'Milestone flag', status: 'Status',
+    start: 'Start date', end: 'End date', date: 'Single date', milestone: 'Milestone flag', status: 'Status',
   };
 
   // Paths that are "content" rather than layout: changing them does not flip the preset to Custom

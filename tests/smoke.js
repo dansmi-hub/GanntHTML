@@ -61,6 +61,18 @@ const fs = require('fs');
   const info2 = await page.textContent('#fileInfo');
   const mapping = await page.evaluate(() => window.RM.app.state.mapping);
 
+  // 4. Real monday.com export with Timeline - Start / End columns and subitems
+  await page.setInputFiles('#fileInput', path.join(root, 'samples', 'Example-Monday.com.xlsx'));
+  await page.waitForFunction(() => window.RM.app.state.fileName === 'Example-Monday.com.xlsx');
+  await preset('PowerPoint'); await shot('example-powerpoint');
+  await page.check('#includeSubs'); await shot('example-with-subitems');
+  await preset('Detailed'); await shot('example-detailed');
+  const exInfo = await page.textContent('#fileInfo');
+  console.log('example info:', exInfo.replace(/\s+/g, ' '));
+  await page.uncheck('#includeSubs');
+  await page.setInputFiles('#fileInput', path.join(root, 'samples', 'flat-list-sample.csv'));
+  await page.waitForFunction(() => window.RM.app.state.fileName.endsWith('.csv'));
+
   // Exports
   const [png] = await Promise.all([page.waitForEvent('download'), page.click('#btnPng')]);
   await png.saveAs(path.join(out, 'export.png'));

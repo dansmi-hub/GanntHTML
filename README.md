@@ -16,7 +16,7 @@ A small, fully local HTML app that turns **monday.com Excel/CSV exports** into c
 4. Drag the file onto the page, or click **Choose a file**.
 5. Pick a preset, adjust the look, then **Export PNG** / **Export SVG** / **Copy**.
 
-You can try it without your own data: click **Try with sample data**, or load one of the files in `samples/`.
+You can try it without your own data: click **Try with sample data**, or load one of the files in `samples/`. `samples/Example-Monday.com.xlsx` is a real (anonymised) monday.com export.
 
 ## What it detects automatically
 
@@ -24,10 +24,10 @@ You can try it without your own data: click **Try with sample data**, or load on
 | --- | --- |
 | **Workstreams** | monday.com groups (the group title rows in a board export), or a column such as *Workstream, Group, Phase, Programme, Project, Team, Epic*. |
 | **Activities** | The *Name / Item / Task / Activity* column. |
-| **Dates** | A monday.com *Timeline* column (`2025-01-06 - 2025-02-14`), or separate *Start* / *End / Due / Finish* columns, or a single *Date* column. Excel dates, ISO, UK (`14/03/2025`), US and written dates (`14 Mar 2025`) are supported. |
-| **Milestones** | A *Milestone / Type* column (values like `Milestone`, `Yes`, `✓`), items whose name contains "milestone", or single-day items (toggle). |
+| **Dates** | monday.com *Timeline - Start* / *Timeline - End* columns (the usual Excel export), a combined *Timeline* column (`2025-01-06 - 2025-02-14`), or *Start* / *End / Due / Finish* columns. A single *Date* column is used when an item has no timeline. Excel serial dates (with or without date formatting), ISO, UK (`14/03/2025`), US and written dates (`14 Mar 2025`) are supported. |
+| **Milestones vs bars** | An item whose start and end are the **same day** (or that only has a single date) is drawn as a milestone ◆. Anything longer is an activity bar. You can also map a column containing "milestone" to flag items explicitly. |
 | **Status** | A *Status / RAG / Health* column, used for optional colour-by-status. |
-| **Subitems** | monday.com subitem blocks are recognised and hidden by default (toggle to include). |
+| **Subitems** | monday.com subitem blocks are recognised and hidden by default. Turn on *Include subitems* to draw them as slimmer, lighter bars directly beneath their parent item. |
 
 Everything detected can be overridden in the **Data → Column mapping** panel. Items without dates are skipped and counted in the file summary.
 
@@ -43,7 +43,7 @@ Everything detected can be overridden in the **Data → Column mapping** panel. 
 
 - **Layout:** canvas (16:9 slide or auto height), title space, fit to slide, optional title inside the image, font, font size, row height, bar thickness, workstream spacing, margins, compact or one-per-row packing.
 - **Workstreams:** heading style (coloured band on the left with centred text, or a centred heading row), band width, heading size, tinted rows. Show, hide, reorder and recolour individual workstreams.
-- **Date range and timescale:** automatic or custom months; weeks, months or quarters (automatic by default).
+- **Date range and timescale:** automatic or custom months; weeks, months or quarters (automatic by default). Plans shorter than about four months snap to whole weeks so short timelines use the full width.
 - **Labels:** activity labels on or off, position (*Auto* puts the label inside when it fits and beside the bar when it doesn't; you can also choose *Always beside* or *Always inside*), dates on activities and milestones.
 - **Milestones:** show or hide, inline or a *Key milestones* row at the top, size, colour.
 - **Today marker:** show or hide, label, colour, date override.

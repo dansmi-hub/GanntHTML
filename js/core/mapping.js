@@ -14,7 +14,7 @@
   const RM = global.RM;
   const U = RM.util;
 
-  const ROLES = ['workstream', 'name', 'timeline', 'start', 'end', 'milestone', 'status'];
+  const ROLES = ['workstream', 'name', 'timeline', 'start', 'end', 'date', 'milestone', 'status'];
 
   const RX = {
     workstream: /work\s*stream|stream|swim\s*lane|^group|group$|phase|programme|program|project|epic|category|area|team|theme|pillar|track/i,
@@ -22,7 +22,7 @@
     timeline: /timeline|time line|gantt|date range|period|schedule|dates$/i,
     start: /start|begin|from|kick.?off/i,
     end: /\bend\b|end date|finish|due|deadline|target|complet|deliver|\bto\b/i,
-    milestone: /milestone|^type$|item type|kind/i,
+    milestone: /milestone/i,
     status: /status|\brag\b|health|state/i,
   };
 
@@ -68,10 +68,10 @@
     m.start = pick((c, p) => RX.start.test(c) && p.date > 0.3);
     m.end = pick((c, p) => RX.end.test(c) && p.date > 0.3);
     m.timeline = pick((c, p) => RX.timeline.test(c) && p.range > 0.3) || (!m.start ? pick((c, p) => p.range > 0.5) : '');
-    if (!m.timeline && !m.start) {
-      // Fall back to any date column (items become single-day / milestones)
-      m.start = pick((c, p) => /date/i.test(c) && p.date > 0.3) || pick((c, p) => p.date > 0.6);
-    }
+    // A single-date column (e.g. monday.com "Date" / "Due date"): used when an item has no start/end,
+    // which makes it a one-day item, i.e. a milestone.
+    m.date = pick((c, p) => /date|due|deadline/i.test(c) && p.count > 0 && p.date > 0.3);
+    if (!m.timeline && !m.start && !m.date) m.date = pick((c, p) => p.date > 0.6);
     m.milestone = pick((c, p) => RX.milestone.test(c) && p.count > 0);
     m.status = pick((c, p) => RX.status.test(c) && p.count > 0);
 
@@ -93,8 +93,10 @@
     const stats = { rows: table.rows.length, used: 0, undated: 0, milestones: 0, subitems: 0 };
     let minDay = Infinity, maxDay = -Infinity;
     let id = 0;
+    let lastParentId = null;
 
     for (const row of table.rows) {
+      if (!row.__isSub) lastParentId = null;
       if (row.__isSub) { stats.subitems++; if (!opts.includeSubitems) continue; }
       const name = mapping.name ? row[mapping.name] : null;
       if (U.isBlank(name)) continue;
@@ -111,12 +113,18 @@
         end = e !== null ? e : s;
         if (start !== null && end < start) { const t = start; start = end; end = t; }
       }
+      if (start === null && mapping.date) {
+        const d = U.parseDate(row[mapping.date], pref);
+        if (d !== null) { start = d; end = d; }
+      }
       if (start === null) { stats.undated++; continue; }
 
-      let milestone = false;
-      if (mapping.milestone && !U.isBlank(row[mapping.milestone])) milestone = MILESTONE_TRUE.test(String(row[mapping.milestone]).trim());
-      if (!milestone && opts.singleDayMilestones && start === end) milestone = true;
-      if (!milestone && /\bmilestone\b/i.test(String(name))) milestone = true;
+      // Rule: an item whose start and end fall on the same day is a milestone; anything longer is a bar.
+      // An explicitly mapped milestone column can also mark items as milestones.
+      let milestone = opts.singleDayMilestones !== false && start === end;
+      if (!milestone && mapping.milestone && !U.isBlank(row[mapping.milestone])) {
+        milestone = MILESTONE_TRUE.test(String(row[mapping.milestone]).trim());
+      }
       if (milestone) { stats.milestones++; start = end; }
 
       let ws = 'All activities';
@@ -132,7 +140,9 @@
         status: mapping.status && !U.isBlank(row[mapping.status]) ? String(row[mapping.status]).trim() : '',
         isSub: !!row.__isSub,
         parent: row.__parent || null,
+        parentId: row.__isSub ? lastParentId : null,
       });
+      if (!row.__isSub) lastParentId = id;
       stats.used++;
       minDay = Math.min(minDay, start);
       maxDay = Math.max(maxDay, end);

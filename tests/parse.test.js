@@ -63,10 +63,34 @@ const d2 = adapters.detect(flat);
 assert.strictEqual(d2.adapter.id, 'generic-table');
 const t2 = d2.adapter.toTable(flat);
 const m2 = mapping.autoMap(t2, 'dmy');
-assert.deepStrictEqual([m2.name, m2.workstream, m2.start, m2.end, m2.milestone], ['Task', 'Workstream', 'Start', 'Finish', 'Type']);
+assert.deepStrictEqual([m2.name, m2.workstream, m2.start, m2.end], ['Task', 'Workstream', 'Start', 'Finish']);
 const mod2 = mapping.buildModel(t2, m2, { datePref: 'dmy' });
 assert.strictEqual(mod2.workstreams.length, 2);
 assert.strictEqual(iso(mod2.workstreams[0].items[0].start), '2025-02-01');
 assert.ok(mod2.workstreams[1].items[0].milestone);
+
+// Real monday.com export (Timeline - Start / Timeline - End as Excel serials, subitem blocks, group summary row)
+global.XLSX = require('../vendor/xlsx.full.min.js');
+global.FileReader = undefined;
+const fs = require('fs');
+const wb = XLSX.read(fs.readFileSync(__dirname + '/../samples/Example-Monday.com.xlsx'), { type: 'buffer' });
+const exRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null });
+const d3 = adapters.detect(exRows);
+assert.strictEqual(d3.adapter.id, 'monday-board');
+const t3 = d3.adapter.toTable(exRows);
+const m3 = mapping.autoMap(t3, 'dmy');
+assert.deepStrictEqual([m3.workstream, m3.name, m3.start, m3.end, m3.date], ['__group', 'Name', 'Timeline - Start', 'Timeline - End', 'Date']);
+let mod3 = mapping.buildModel(t3, m3, { singleDayMilestones: true });
+assert.strictEqual(mod3.workstreams[0].name, 'Programme 001 Platform and Product 001');
+const byName = (mod, n) => mod.workstreams[0].items.find((i) => i.name === n);
+assert.ok(byName(mod3, 'Project 001').milestone, 'one-day item is a milestone');
+['Project 002', 'Project 003', 'Project 004'].forEach((n) => assert.ok(!byName(mod3, n).milestone, n + ' is a bar'));
+assert.strictEqual(iso(byName(mod3, 'Project 003').start), '2026-11-23');
+assert.strictEqual(iso(byName(mod3, 'Project 003').end), '2026-12-02');
+mod3 = mapping.buildModel(t3, m3, { singleDayMilestones: true, includeSubitems: true });
+const conf = byName(mod3, 'Confirm Organisation 001 will be doing the build/tech work');
+const p2 = mod3.workstreams[0].items.find((i) => i.name === 'Project 002');
+assert.ok(conf.isSub && conf.milestone && conf.parentId === p2.id, 'subitem with only a Date is a milestone under its parent');
+assert.ok(!byName(mod3, 'DPIA').milestone);
 
 console.log('parse tests OK');
