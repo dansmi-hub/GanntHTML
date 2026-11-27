@@ -42,11 +42,24 @@
     return (row || []).filter((v) => v !== null && v !== undefined && String(v).trim() !== '').length;
   }
 
+  // Column titles commonly found in monday.com (and similar) exports
+  const KNOWN_HEADER = /^(name|items?|item name|tasks?|task name|activit(y|ies)|title|deliverables?|projects?|initiatives?|epics?|features?|status|owners?|person|people|assignees?|team|priority|timeline.*|.*\bdates?\b.*|start.*|end.*|due.*|deadline|duration.*|dependen.*|sub-?items|group|notes?|files?|tags?|link.*|.*effort.*|progress|budget|phase|workstream|creation log|last updated|item id.*|location|text|numbers?|time tracking|week|resource)$/i;
+
+  /**
+   * Is this row a table header? Either its first cell is a name-like title
+   * ("Name", "Item", "Task"...), or it is all text and several cells are
+   * well-known column titles (so renamed first columns still work).
+   */
   function looksLikeHeader(row) {
-    if (!row || nonEmpty(row) < 2) return false;
-    const first = row.find((v) => v !== null && String(v).trim() !== '');
-    const strings = row.filter((v) => typeof v === 'string' && v.trim() !== '').length;
-    return NAME_HEADER.test(String(first).trim()) && strings >= Math.max(2, nonEmpty(row) * 0.8);
+    const n = nonEmpty(row);
+    if (!row || n < 2) return false;
+    const cells = row.filter((v) => v !== null && v !== undefined && String(v).trim() !== '');
+    if (cells.some((v) => typeof v !== 'string')) return false;
+    const first = String(cells[0]).trim();
+    if (/^sub-?items?$/i.test(first)) return false; // subitem header, handled separately
+    if (NAME_HEADER.test(first)) return true;
+    const known = cells.filter((v) => KNOWN_HEADER.test(String(v).trim())).length;
+    return known >= 2 && known >= n * 0.4;
   }
 
   /** Make header labels unique and non-empty */

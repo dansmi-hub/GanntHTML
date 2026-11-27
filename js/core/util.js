@@ -68,6 +68,8 @@
     }
     let s = String(v).trim();
     if (!s) return null;
+    // "Monday, November 2, 2026" / "Mon 2 Nov 2026" -> drop the weekday
+    s = s.replace(/^(mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?,?\s+/i, '');
     let m;
     // ISO 2025-03-14 or 2025/03/14 (optionally followed by a time)
     if ((m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:$|[T\s])/))) {

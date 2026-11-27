@@ -27,9 +27,11 @@ You can try it without your own data: click **Try with sample data**, or load on
 | **Dates** | monday.com *Timeline - Start* / *Timeline - End* columns (the usual Excel export), a combined *Timeline* column (`2025-01-06 - 2025-02-14`), or *Start* / *End / Due / Finish* columns. A single *Date* column is used when an item has no timeline. Excel serial dates (with or without date formatting), ISO, UK (`14/03/2025`), US and written dates (`14 Mar 2025`) are supported. |
 | **Milestones vs bars** | An item whose start and end are the **same day** (or that only has a single date) is drawn as a milestone ◆. Anything longer is an activity bar. You can also map a column containing "milestone" to flag items explicitly. |
 | **Status** | A *Status / RAG / Health* column, used for optional colour-by-status. |
-| **Subitems** | monday.com subitem blocks are recognised and hidden by default. Turn on *Include subitems* to draw them as slimmer, lighter bars directly beneath their parent item. |
+| **Subitems** | monday.com subitem blocks are recognised. *Auto* (the default) shows subitems only where the parent item has no dates of its own, and draws that parent as a summary bar spanning its subitems. *Always show* draws every subitem as a slimmer, lighter bar beneath its parent. *Hide* leaves them out. |
 
-Everything detected can be overridden in the **Data → Column mapping** panel. Items without dates are skipped and counted in the file summary.
+When you load a file, the app tries **every sheet with every format** (monday.com board layout or a plain table) and keeps the combination that plots the most activities. Extra cover sheets, data starting in column B, a renamed *Name* column, Excel-saved files and CSV exports all load without changes.
+
+Everything detected can be overridden in the **Data → Column mapping** panel. **Preview of the data read** shows the first rows as the app understood them. Items without dates are skipped and counted in the file summary. If nothing can be plotted, the page explains why and offers a **Copy these details** button. It copies only column titles and a few date values, never activity names, so you can share it when reporting a problem.
 
 ## Presets
 
@@ -64,6 +66,7 @@ vendor/xlsx.full.min.js    SheetJS (bundled, Apache-2.0; see vendor/xlsx.LICENSE
 js/core/util.js            Dates (time-zone-safe day numbers), colours/contrast, text measuring
 js/core/reader.js          File → sheets (array of rows) via SheetJS
 js/core/mapping.js         Column auto-detection and the roadmap model builder
+js/core/loader.js          Tries every sheet x adapter and keeps the best result
 js/adapters/registry.js    Export-format adapter registry
 js/adapters/monday-board.js  monday.com board/Gantt export (groups, repeated headers, subitems)
 js/adapters/generic-table.js Any single-header table (CSV lists, other tools)
@@ -103,7 +106,8 @@ Add a `RM.presets.register({ id, label, description, style: { ...partial style..
 There's no build step. To run the checks:
 
 ```bash
-node tests/parse.test.js          # parser / detection unit tests (Node only)
+node tests/parse.test.js          # parser / detection unit tests (Node only), incl. export variants
+node tests/make-fixtures.js       # regenerate the export-variant fixtures in tests/fixtures/
 node tests/smoke.js               # headless browser test (needs Playwright installed)
 ```
 

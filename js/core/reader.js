@@ -69,6 +69,11 @@
     const text = isTextFile(file.name);
     // For CSV we keep raw strings so dates are parsed by our own (UK/US aware) parser
     const wb = XLSX.read(buf, { type: 'array', raw: text, cellDates: false, dense: false });
+    return fromWorkbook(wb);
+  }
+
+  /** Workbook (already parsed by SheetJS) -> [{name, rows}] */
+  function fromWorkbook(wb) {
     return wb.SheetNames.map((name) => ({ name, rows: sheetToRows(wb.Sheets[name]) }));
   }
 
@@ -77,5 +82,5 @@
     return [{ name, rows }];
   }
 
-  RM.reader = { readFile, fromRows };
-})(window);
+  RM.reader = { readFile, fromRows, fromWorkbook };
+})(typeof window !== 'undefined' ? window : globalThis);

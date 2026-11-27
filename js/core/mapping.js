@@ -68,6 +68,11 @@
     m.start = pick((c, p) => RX.start.test(c) && p.date > 0.3);
     m.end = pick((c, p) => RX.end.test(c) && p.date > 0.3);
     m.timeline = pick((c, p) => RX.timeline.test(c) && p.range > 0.3) || (!m.start ? pick((c, p) => p.range > 0.5) : '');
+    // Clearly-named date columns are mapped even if their values can't be read yet,
+    // so the user sees them (and their values) in the mapping/diagnostics.
+    const DATEY = /date|timeline|^start$|^end$|^finish$/i;
+    if (!m.timeline && !m.start) m.start = pick((c, p) => RX.start.test(c) && DATEY.test(c) && p.count > 0);
+    if (!m.timeline && !m.end) m.end = pick((c, p) => RX.end.test(c) && DATEY.test(c) && p.count > 0);
     // A single-date column (e.g. monday.com "Date" / "Due date"): used when an item has no start/end,
     // which makes it a one-day item, i.e. a milestone.
     m.date = pick((c, p) => /date|due|deadline/i.test(c) && p.count > 0 && p.date > 0.3);
@@ -93,14 +98,15 @@
     const stats = { rows: table.rows.length, used: 0, undated: 0, milestones: 0, subitems: 0 };
     let minDay = Infinity, maxDay = -Infinity;
     let id = 0;
-    let lastParentId = null;
+    // Subitems: 'auto' shows them only where the parent item has no dates of its own
+    // (common in monday.com boards where the detail lives in subitems), 'always', or 'never'.
+    const subMode = opts.subitems || (opts.includeSubitems ? 'always' : 'auto');
+    stats.subitemsShown = 0;
+    stats.rollups = 0;
+    stats.subitemsHidden = 0;
+    let parent = null; // { row, dated, item (once plotted), ws }
 
-    for (const row of table.rows) {
-      if (!row.__isSub) lastParentId = null;
-      if (row.__isSub) { stats.subitems++; if (!opts.includeSubitems) continue; }
-      const name = mapping.name ? row[mapping.name] : null;
-      if (U.isBlank(name)) continue;
-
+    const rowDates = (row) => {
       let start = null, end = null;
       if (mapping.timeline) {
         const r = U.parseRange(row[mapping.timeline], pref);
@@ -117,35 +123,86 @@
         const d = U.parseDate(row[mapping.date], pref);
         if (d !== null) { start = d; end = d; }
       }
-      if (start === null) { stats.undated++; continue; }
+      return start === null ? null : { start, end };
+    };
 
-      // Rule: an item whose start and end fall on the same day is a milestone; anything longer is a bar.
-      // An explicitly mapped milestone column can also mark items as milestones.
-      let milestone = opts.singleDayMilestones !== false && start === end;
-      if (!milestone && mapping.milestone && !U.isBlank(row[mapping.milestone])) {
-        milestone = MILESTONE_TRUE.test(String(row[mapping.milestone]).trim());
-      }
-      if (milestone) { stats.milestones++; start = end; }
+    const wsOf = (row) => {
+      if (!mapping.workstream) return 'All activities';
+      const v = mapping.workstream === '__group' ? row.__group : row[mapping.workstream];
+      return U.isBlank(v) ? 'Other' : String(v).trim();
+    };
 
-      let ws = 'All activities';
-      if (mapping.workstream) {
-        const v = mapping.workstream === '__group' ? row.__group : row[mapping.workstream];
-        ws = U.isBlank(v) ? 'Other' : String(v).trim();
-      }
+    const push = (row, name, d, extra) => {
+      const ws = wsOf(row);
       if (!wsMap.has(ws)) wsMap.set(ws, { name: ws, items: [] });
-      wsMap.get(ws).items.push({
+      const item = Object.assign({
         id: ++id,
         name: String(name).trim(),
-        start, end, milestone,
+        start: d.start, end: d.end, milestone: false,
         status: mapping.status && !U.isBlank(row[mapping.status]) ? String(row[mapping.status]).trim() : '',
         isSub: !!row.__isSub,
         parent: row.__parent || null,
-        parentId: row.__isSub ? lastParentId : null,
-      });
-      if (!row.__isSub) lastParentId = id;
+        parentId: null,
+        rollup: false,
+      }, extra || {});
+      wsMap.get(ws).items.push(item);
+      return item;
+    };
+
+    const isMilestone = (row, d) => {
+      // Rule: an item whose start and end fall on the same day is a milestone; anything longer is a bar.
+      // An explicitly mapped milestone column can also mark items as milestones.
+      let m = opts.singleDayMilestones !== false && d.start === d.end;
+      if (!m && row && mapping.milestone && !U.isBlank(row[mapping.milestone])) {
+        m = MILESTONE_TRUE.test(String(row[mapping.milestone]).trim());
+      }
+      return m;
+    };
+
+    for (const row of table.rows) {
+      const name = mapping.name ? row[mapping.name] : null;
+      const d = U.isBlank(name) ? null : rowDates(row);
+
+      if (!row.__isSub) {
+        parent = U.isBlank(name) ? null : { row, name, dated: !!d, item: null };
+        if (U.isBlank(name)) continue;
+        if (!d) { stats.undated++; continue; }
+      } else {
+        stats.subitems++;
+        const parentDated = parent && parent.dated;
+        if (subMode === 'never' || (subMode === 'auto' && parentDated)) { stats.subitemsHidden++; continue; }
+        if (U.isBlank(name)) continue;
+        if (!d) { stats.undated++; continue; }
+        stats.subitemsShown++;
+        // Parent without dates of its own: draw it as a summary bar spanning its subitems
+        if (parent && !parent.dated && !parent.item) {
+          parent.item = push(parent.row, parent.name, { start: d.start, end: d.end }, { rollup: true });
+          stats.rollups++;
+          stats.used++;
+        }
+      }
+
+      const ms = isMilestone(row, d);
+      const item = push(row, name, ms ? { start: d.end, end: d.end } : d, { milestone: ms });
+      if (row.__isSub && parent && parent.item) {
+        item.parentId = parent.item.id;
+        if (parent.item.rollup) {
+          parent.item.start = Math.min(parent.item.start, item.start);
+          parent.item.end = Math.max(parent.item.end, item.end);
+        }
+      }
+      if (!row.__isSub && parent) parent.item = item;
       stats.used++;
-      minDay = Math.min(minDay, start);
-      maxDay = Math.max(maxDay, end);
+    }
+
+    // Final pass: milestone flags for roll-ups, counts and overall date span
+    for (const ws of wsMap.values()) {
+      for (const it of ws.items) {
+        if (it.rollup) it.milestone = isMilestone(null, it);
+        if (it.milestone) stats.milestones++;
+        minDay = Math.min(minDay, it.start);
+        maxDay = Math.max(maxDay, it.end);
+      }
     }
 
     return {

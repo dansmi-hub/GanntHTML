@@ -130,3 +130,15 @@ select, input[type="text"], input[type="number"], input[type="month"], input[typ
   .presets { margin: 0; }
   .badge { display: none; }
 }
+
+/* Data preview + diagnostics */
+details.inner { border: 0; padding: 0; margin-top: 8px; }
+details.inner summary { font-weight: 500; font-size: 13px; padding: 6px 0; }
+.tablePreview { overflow: auto; max-height: 260px; border: 1px solid var(--line); border-radius: 6px; }
+.tablePreview table { border-collapse: collapse; font-size: 11px; white-space: nowrap; }
+.tablePreview th, .tablePreview td { padding: 3px 6px; border-bottom: 1px solid var(--line); text-align: left; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.tablePreview th { background: var(--bg); position: sticky; top: 0; }
+.tablePreview .mapped { background: #eef5fb; }
+.tablePreview th.mapped { background: #dbeafe; }
+.tablePreview tr.sub td:first-child { padding-left: 14px; color: var(--muted); }
+.diagText { background: var(--bg); border-radius: 6px; padding: 10px 12px; font-size: 12px; white-space: pre-wrap; word-break: break-word; max-height: 240px; overflow: auto; }

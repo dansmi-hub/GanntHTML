@@ -55,7 +55,18 @@
             </select>
           </label>
           <label class="check"><input type="checkbox" id="singleDayMs" checked> Treat single-day items as milestones</label>
-          <label class="check"><input type="checkbox" id="includeSubs"> Include subitems</label>
+          <label>Subitems
+            <select id="subitemsMode">
+              <option value="auto">Auto (show where the parent has no dates)</option>
+              <option value="always">Always show</option>
+              <option value="never">Hide</option>
+            </select>
+          </label>
+          <details class="inner">
+            <summary>Preview of the data read</summary>
+            <p class="hint">First rows as understood by the app. Highlighted columns are used for the chart.</p>
+            <div id="tablePreview" class="tablePreview"></div>
+          </details>
         </div>
       </details>
 
@@ -208,6 +219,15 @@
             <button id="btnSample2" class="primary">Try with sample data</button>
           </div>
         </div>
+        <div id="diag" class="empty" hidden>
+          <div class="emptyCard">
+            <h2>The file was read, but nothing could be plotted</h2>
+            <p id="diagReason"></p>
+            <p class="hint">What the app found (column titles and a few date values only, no activity names):</p>
+            <pre id="diagText" class="diagText"></pre>
+            <button id="btnCopyDiag">Copy these details</button>
+          </div>
+        </div>
         <div id="preview" class="preview" hidden></div>
       </div>
     </main>
@@ -222,6 +242,7 @@
   <script src="js/core/util.js"></script>
   <script src="js/core/reader.js"></script>
   <script src="js/core/mapping.js"></script>
+  <script src="js/core/loader.js"></script>
   <!-- Format adapters: add new monday.com/other export formats here -->
   <script src="js/adapters/registry.js"></script>
   <script src="js/adapters/monday-board.js"></script>

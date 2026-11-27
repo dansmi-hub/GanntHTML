@@ -3,7 +3,7 @@
  */
 const assert = require('assert');
 global.window = global;
-['js/core/util.js', 'js/core/mapping.js', 'js/adapters/registry.js', 'js/adapters/monday-board.js',
+['js/core/util.js', 'js/core/reader.js', 'js/core/mapping.js', 'js/core/loader.js', 'js/adapters/registry.js', 'js/adapters/monday-board.js',
   'js/adapters/generic-table.js', 'samples/sample-data.js'].forEach((f) => require('../' + f));
 const { util: U, adapters, mapping } = global.RM;
 const iso = (d) => U.formatDay(d, 'iso');
@@ -92,5 +92,36 @@ const conf = byName(mod3, 'Confirm Organisation 001 will be doing the build/tech
 const p2 = mod3.workstreams[0].items.find((i) => i.name === 'Project 002');
 assert.ok(conf.isSub && conf.milestone && conf.parentId === p2.id, 'subitem with only a Date is a milestone under its parent');
 assert.ok(!byName(mod3, 'DPIA').milestone);
+
+// Example export with subitems on "auto": Project 005 has no dates and undated subitems -> nothing extra
+mod3 = mapping.buildModel(t3, m3, {});
+assert.strictEqual(mod3.stats.used, 4);
+
+// Export variants, loaded the same way the app does (every sheet x every adapter)
+const load = (file) => {
+  const buf = fs.readFileSync(__dirname + '/fixtures/' + file);
+  const wb = XLSX.read(buf, { type: 'buffer', raw: file.endsWith('.csv'), cellDates: false });
+  return global.RM.loader.analyse(global.RM.reader.fromWorkbook(wb), { datePref: 'dmy', subitems: 'auto' });
+};
+const summary = (res) => res.model.workstreams.map((w) => `${w.name}:` + w.items.map((i) => (i.milestone ? '◆' : '▬') + i.name).join(','));
+
+let res = load('multi-group-dateformat.xlsx');
+assert.deepStrictEqual(summary(res), ['Group Alpha:▬Alpha one,◆Alpha gate', 'Group Beta:▬Beta build,◆Beta launch']);
+
+res = load('renamed-name-timeline-text.xlsx');
+assert.strictEqual(res.mapping.name, 'Initiative');
+assert.deepStrictEqual(summary(res), ['Q1 Initiatives:▬Discovery,▬Pilot,◆Board approval']);
+
+res = load('dates-on-subitems-only.xlsx');
+assert.deepStrictEqual(summary(res), ['Delivery:▬Project A,▬one,◆two,▬Project B,▬three']);
+const pa = res.model.workstreams[0].items[0];
+assert.ok(pa.rollup && iso(pa.start) === '2026-11-02' && iso(pa.end) === '2026-12-01', 'parent spans its subitems');
+
+res = load('cover-sheet-offset-text-dates.xlsx');
+assert.strictEqual(res.sheetName, 'Items');
+assert.deepStrictEqual(summary(res), ['Workstream One:▬Thing one,▬Thing two,◆Go live']);
+
+res = load('board-export.csv');
+assert.deepStrictEqual(summary(res), ['Group X:▬Item 1,◆Item 2', 'Group Y:▬Item 3']);
 
 console.log('parse tests OK');

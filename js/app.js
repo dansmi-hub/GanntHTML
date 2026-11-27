@@ -26,7 +26,7 @@
     table: null,
     mapping: null,
     model: null,
-    dataOpts: { datePref: 'dmy', singleDayMilestones: true, includeSubitems: false },
+    dataOpts: { datePref: 'dmy', singleDayMilestones: true, subitems: 'auto' },
     style: loadStyle(),
   };
 
@@ -60,11 +60,13 @@
 
   function renderNow() {
     const has = !!(state.model && state.model.workstreams.length);
-    $('#empty').hidden = has;
+    const failed = !!(state.model && !has);
+    $('#empty').hidden = has || failed;
+    $('#diag').hidden = !failed;
     $('#preview').hidden = !has;
     ['#btnPng', '#btnSvg', '#btnCopy'].forEach((s) => { $(s).disabled = !has; });
     const warn = [];
-    if (state.model && !state.model.workstreams.length) warn.push('No dated activities found. Check the column mapping in the Data panel.');
+    if (failed) renderDiagnostics();
     if (has) {
       const r = RM.render.render(state.model, state.style);
       $('#preview').innerHTML = r.svg;
@@ -252,30 +254,31 @@
     state.sheets = sheets;
     state.fileName = fileName;
     state.adapterId = 'auto';
-    // Prefer the sheet with the most content
-    let best = 0, bestN = -1;
-    sheets.forEach((s, i) => { const n = s.rows.filter((r) => r && r.length).length; if (n > bestN) { best = i; bestN = n; } });
-    state.sheetIndex = best;
+    // Try every sheet x format and keep whichever plots the most
+    const best = RM.loader.analyse(sheets, state.dataOpts);
+    state.sheetIndex = best.sheetIndex;
 
     const ss = $('#sheetSelect');
     ss.innerHTML = '';
     sheets.forEach((s, i) => { const o = document.createElement('option'); o.value = i; o.textContent = s.name; ss.appendChild(o); });
-    ss.value = String(best);
+    ss.value = String(best.sheetIndex);
     ss.closest('label').hidden = sheets.length < 2;
     $('#dataControls').hidden = false;
-    loadSheet(true);
+    applyAnalysis(best, true);
   }
 
-  function loadSheet(isNewFile) {
-    const rows = state.sheets[state.sheetIndex].rows;
-    let adapter;
-    if (state.adapterId === 'auto') adapter = RM.adapters.detect(rows).adapter;
-    else adapter = RM.adapters.get(state.adapterId);
-    state.detectedAdapter = adapter.id;
-    state.table = adapter.toTable(rows);
-    state.mapping = RM.mapping.autoMap(state.table, state.dataOpts.datePref);
+  /** Re-run detection after the user picks a different sheet or format. */
+  function loadSheet() {
+    const best = RM.loader.analyse(state.sheets, state.dataOpts, { sheetIndex: state.sheetIndex, adapterId: state.adapterId });
+    applyAnalysis(best, false);
+  }
+
+  function applyAnalysis(best, isNewFile) {
+    state.detectedAdapter = best.adapterId;
+    state.table = best.table;
+    state.mapping = best.mapping;
+    state.style.order = [];
     if (isNewFile) {
-      state.style.order = [];
       if (state.table.meta.title && !state.style.canvas.title) state.style.canvas.title = state.table.meta.title;
       syncControls();
     }
@@ -286,9 +289,71 @@
 
   function rebuildModel() {
     state.model = RM.mapping.buildModel(state.table, state.mapping, state.dataOpts);
+    renderDataPreview();
     renderWsList();
     renderFileInfo();
     schedule();
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Diagnostics: explain what was read when nothing could be plotted   */
+  /* ---------------------------------------------------------------- */
+  function diagnosticsText() {
+    // Column titles and a few date samples only: no activity names or other content
+    const t = state.table, m = state.mapping, s = state.model.stats;
+    const sheet = state.sheets[state.sheetIndex];
+    const lines = [
+      `File type: ${(state.fileName.split('.').pop() || '').toLowerCase()} · sheets: ${state.sheets.length} · using "${sheet.name}" (${sheet.rows.length} rows)`,
+      `Format: ${state.detectedAdapter} · groups found: ${t.meta.groupsDetected ? 'yes' : 'no'} · data rows: ${t.rows.length} (${s.subitems} subitems)`,
+      `Columns: ${t.columns.join(' | ') || '(none found)'}`,
+      `Mapping: ${RM.mapping.ROLES.map((r) => `${ROLE_LABELS[r]}=${m[r] || '—'}`).join(', ')}`,
+    ];
+    ['timeline', 'start', 'end', 'date'].forEach((role) => {
+      const col = m[role];
+      if (!col) return;
+      const vals = t.rows.map((r) => r[col]).filter((v) => !U.isBlank(v)).slice(0, 3);
+      lines.push(`${ROLE_LABELS[role]} samples: ${vals.length ? vals.map((v) => `${JSON.stringify(v)} (${typeof v})`).join(', ') : '(all empty)'}`);
+    });
+    return lines.join('\n');
+  }
+
+  function renderDiagnostics() {
+    const t = state.table, m = state.mapping;
+    const reasons = [];
+    if (!t.rows.length) reasons.push('No table was found in the file. Check it is the board export rather than a summary or chart.');
+    else if (!m.name) reasons.push('No activity name column was recognised. Pick it under <em>Activity</em> in the Data panel.');
+    else if (!m.timeline && !m.start && !m.end && !m.date) reasons.push('No date or timeline column was recognised. Pick the date columns in the Data panel.');
+    else reasons.push('Date columns were found, but none of the items had dates that could be read. Check the date columns in the Data panel, or switch <em>Subitems</em> to <em>Always show</em> if the dates are on subitems.');
+    $('#diagReason').innerHTML = reasons.join('<br>');
+    $('#diagText').textContent = diagnosticsText();
+  }
+
+  function renderDataPreview() {
+    const box = $('#tablePreview');
+    box.innerHTML = '';
+    if (!state.table || !state.table.rows.length) { box.textContent = 'No rows.'; return; }
+    const used = new Set(Object.values(state.mapping).filter(Boolean));
+    const cols = ['__group'].concat(state.table.columns).filter((c) => c !== '__group' || state.table.meta.groupsDetected);
+    const tbl = document.createElement('table');
+    const head = tbl.createTHead().insertRow();
+    cols.forEach((c) => {
+      const th = document.createElement('th');
+      th.textContent = c === '__group' ? '(group)' : c;
+      if (used.has(c)) th.className = 'mapped';
+      head.appendChild(th);
+    });
+    const body = tbl.createTBody();
+    state.table.rows.slice(0, 12).forEach((r) => {
+      const tr = body.insertRow();
+      if (r.__isSub) tr.className = 'sub';
+      cols.forEach((c) => {
+        const td = tr.insertCell();
+        const v = r[c];
+        td.textContent = v === null || v === undefined ? '' : String(v);
+        if (used.has(c)) td.className = 'mapped';
+      });
+    });
+    box.appendChild(tbl);
   }
 
   function renderAdapterSelect() {
@@ -329,7 +394,10 @@
       `${state.model.workstreams.length} workstreams · ${s.used} items plotted (${s.milestones} milestones)`,
     ];
     if (s.undated) parts.push(`${s.undated} item${s.undated > 1 ? 's' : ''} skipped (no dates)`);
-    if (s.subitems && !state.dataOpts.includeSubitems) parts.push(`${s.subitems} subitems hidden`);
+    if (s.subitems) {
+      parts.push(`${s.subitems} subitems: ${s.subitemsShown} shown${s.subitemsHidden ? `, ${s.subitemsHidden} hidden (see Subitems below)` : ''}`);
+    }
+    if (s.rollups) parts.push(`${s.rollups} undated item${s.rollups > 1 ? 's' : ''} drawn as a summary of ${s.rollups > 1 ? 'their' : 'its'} subitems`);
     if (state.model.minDay !== null) parts.push(`${U.formatDay(state.model.minDay)} → ${U.formatDay(state.model.maxDay)}`);
     info.innerHTML = parts.join('<br>');
   }
@@ -359,11 +427,11 @@
     $('#btnSample').addEventListener('click', sample);
     $('#btnSample2').addEventListener('click', sample);
 
-    $('#sheetSelect').addEventListener('change', (e) => { state.sheetIndex = +e.target.value; state.style.order = []; loadSheet(false); });
-    $('#adapterSelect').addEventListener('change', (e) => { state.adapterId = e.target.value; loadSheet(false); });
+    $('#sheetSelect').addEventListener('change', (e) => { state.sheetIndex = +e.target.value; loadSheet(); });
+    $('#adapterSelect').addEventListener('change', (e) => { state.adapterId = e.target.value; loadSheet(); });
     $('#datePref').addEventListener('change', (e) => { state.dataOpts.datePref = e.target.value; if (state.table) rebuildModel(); });
     $('#singleDayMs').addEventListener('change', (e) => { state.dataOpts.singleDayMilestones = e.target.checked; if (state.table) rebuildModel(); });
-    $('#includeSubs').addEventListener('change', (e) => { state.dataOpts.includeSubitems = e.target.checked; if (state.table) rebuildModel(); });
+    $('#subitemsMode').addEventListener('change', (e) => { state.dataOpts.subitems = e.target.value; if (state.table) rebuildModel(); });
   }
 
   /* ---------------------------------------------------------------- */
@@ -435,6 +503,10 @@
     initData();
     initExport();
     initReset();
+    $('#btnCopyDiag').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText($('#diagText').textContent); toast('Copied'); }
+      catch (e) { toast('Select the text and copy it manually', 4000); }
+    });
     renderNow();
   }
 
