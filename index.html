@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Privacy: block all network requests from this page. Data never leaves the browser. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file:; img-src 'self' file: data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
   <title>Roadmap Studio</title>
   <link rel="stylesheet" href="css/app.css">
 </head>
@@ -121,6 +121,9 @@
         <label data-show="workstream.style=band" class="range">Band width <input type="range" min="100" max="420" step="5" data-bind="workstream.width"><output data-unit="px"></output></label>
         <label class="range">Heading size <input type="range" min="9" max="28" step="1" data-bind="workstream.fontSize"><output data-unit="px"></output></label>
         <label class="check"><input type="checkbox" data-bind="workstream.stripes"> Tinted workstream rows</label>
+        <div class="subhead">Items with subitems</div>
+        <label class="check"><input type="checkbox" data-bind="groups.summaryLine"> Summary line spanning the subitems</label>
+        <label class="check"><input type="checkbox" data-bind="groups.panel"> Outline the group</label>
         <div class="wslist" id="wsList"><p class="hint">Load data to show, hide, reorder and recolour workstreams.</p></div>
       </details>
 

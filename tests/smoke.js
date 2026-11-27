@@ -95,6 +95,19 @@ const fs = require('fs');
   const svgText = fs.readFileSync(path.join(out, 'export.svg'), 'utf8');
 
   await page.screenshot({ path: path.join(out, 'app.png') });
+
+  // 7. Security regressions: file content never persisted; tampered settings can't inject markup
+  const stored = await page.evaluate(() => localStorage.getItem('roadmap-studio.style.v1') || '');
+  if (/Digital Transformation|Strategy & Governance|Programme 001/.test(stored)) { console.error('File-derived content found in localStorage'); process.exitCode = 1; }
+  await page.evaluate(() => localStorage.setItem('roadmap-studio.style.v1', JSON.stringify({
+    fontSize: 19, colours: { background: '#fff"/><image href="x"/><rect x="0' }, fontFamily: 'x"><script>window.__p=1</script>',
+  })));
+  await page.reload();
+  await page.click('#btnSample2');
+  await page.waitForTimeout(300);
+  const sec = await page.evaluate(() => ({ fs: window.RM.app.state.style.fontSize, injected: document.querySelectorAll('#preview image, #preview script').length, p: !!window.__p }));
+  if (sec.fs !== 19 || sec.injected || sec.p) { console.error('Settings sanitisation failed', sec); process.exitCode = 1; }
+  console.log('security checks:', JSON.stringify(sec));
   await browser.close();
 
   console.log('xlsx info:', info1.replace(/\s+/g, ' '));
