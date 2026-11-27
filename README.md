@@ -41,6 +41,17 @@ Everything detected can be overridden in the **Data → Column mapping** panel. 
 | **Detailed** | One activity per row with dates on each bar. The height grows to fit everything, which suits appendices, documents and handouts. |
 | **Custom** | Any change to a layout control switches here, so you can always go back to a clean preset. |
 
+## The interface
+
+- **Top bar:** Open file, the presets, and the export buttons.
+- **Sidebar:**
+  - **Data setup:** load a file, check the column mapping, date format and subitems.
+  - **Design:** everything about the look. Each section has a **?** that opens its Help entry, and hovering a control explains it.
+- **Main tabs:**
+  - **Roadmap:** the live chart, with zoom and a status line.
+  - **Loaded data:** every row from your file and what happened to it (bar, milestone, summary, no dates, subitem hidden, workstream hidden, outside the date range), with search, filters and an option to show all columns.
+  - **Help:** a guide to every control, plus troubleshooting.
+
 ## Controls
 
 - **Layout:** canvas (16:9 slide or auto height), title space, fit to slide, optional title inside the image, font, font size, row height, bar thickness, workstream spacing, margins, compact or one-per-row packing.

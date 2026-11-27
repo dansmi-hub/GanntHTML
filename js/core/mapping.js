@@ -159,24 +159,29 @@
       return m;
     };
 
-    for (const row of table.rows) {
+    // What happened to each table row, for the "Loaded data" view:
+    // 'plotted' | 'summary' (undated parent drawn across its subitems) | 'no-dates' | 'no-name' | 'sub-hidden'
+    const outcomes = new Array(table.rows.length);
+    table.rows.forEach((row, idx) => {
       const name = mapping.name ? row[mapping.name] : null;
       const d = U.isBlank(name) ? null : rowDates(row);
 
       if (!row.__isSub) {
-        parent = U.isBlank(name) ? null : { row, name, dated: !!d, item: null };
-        if (U.isBlank(name)) continue;
-        if (!d) { stats.undated++; continue; }
+        parent = U.isBlank(name) ? null : { row, name, idx, dated: !!d, item: null };
+        if (U.isBlank(name)) { outcomes[idx] = { status: 'no-name' }; return; }
+        if (!d) { stats.undated++; outcomes[idx] = { status: 'no-dates' }; return; }
       } else {
         stats.subitems++;
         const parentDated = parent && parent.dated;
-        if (subMode === 'never' || (subMode === 'auto' && parentDated)) { stats.subitemsHidden++; continue; }
-        if (U.isBlank(name)) continue;
-        if (!d) { stats.undated++; continue; }
+        if (subMode === 'never' || (subMode === 'auto' && parentDated)) { stats.subitemsHidden++; outcomes[idx] = { status: 'sub-hidden' }; return; }
+        if (U.isBlank(name)) { outcomes[idx] = { status: 'no-name' }; return; }
+        if (!d) { stats.undated++; outcomes[idx] = { status: 'no-dates' }; return; }
         stats.subitemsShown++;
         // Parent without dates of its own: draw it as a summary bar spanning its subitems
         if (parent && !parent.dated && !parent.item) {
           parent.item = push(parent.row, parent.name, { start: d.start, end: d.end }, { rollup: true });
+          outcomes[parent.idx] = { status: 'summary', item: parent.item };
+          stats.undated--; // it is drawn after all
           stats.rollups++;
           stats.used++;
         }
@@ -184,6 +189,7 @@
 
       const ms = isMilestone(row, d);
       const item = push(row, name, ms ? { start: d.end, end: d.end } : d, { milestone: ms });
+      outcomes[idx] = { status: 'plotted', item };
       if (row.__isSub && parent && parent.item) {
         item.parentId = parent.item.id;
         if (parent.item.rollup) {
@@ -193,7 +199,7 @@
       }
       if (!row.__isSub && parent) parent.item = item;
       stats.used++;
-    }
+    });
 
     // Final pass: milestone flags for roll-ups, counts and overall date span
     for (const ws of wsMap.values()) {
@@ -206,6 +212,7 @@
     }
 
     return {
+      outcomes,
       workstreams: Array.from(wsMap.values()),
       minDay: isFinite(minDay) ? minDay : null,
       maxDay: isFinite(maxDay) ? maxDay : null,

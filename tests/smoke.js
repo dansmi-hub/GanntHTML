@@ -24,7 +24,8 @@ const fs = require('fs');
   await page.goto('file://' + path.join(root, 'index.html'));
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  await page.evaluate(() => document.querySelectorAll('details').forEach((d) => (d.open = true)));
+  // Show every settings section at once so controls in both sidebar tabs can be driven
+  await page.evaluate(() => { document.querySelectorAll('details').forEach((d) => (d.open = true)); document.querySelectorAll('.sidePane').forEach((p) => (p.hidden = false)); });
 
   const shot = async (name) => {
     await page.waitForTimeout(150);
@@ -86,6 +87,24 @@ const fs = require('fs');
 
   await page.setInputFiles('#fileInput', path.join(root, 'samples', 'flat-list-sample.csv'));
   await page.waitForFunction(() => window.RM.app.state.fileName.endsWith('.csv'));
+
+  // Tabs: loaded data lists rows with statuses; help links open the right section
+  await page.click('.mainTabs [data-tab="data"]');
+  const dataRows = await page.locator('#dataTable tbody tr').count();
+  const chips = await page.locator('#dataTable .chip').allTextContents();
+  await page.selectOption('#dataFilter', 'skipped');
+  const skippedRows = await page.locator('#dataTable tbody tr').count();
+  await page.selectOption('#dataFilter', 'all');
+  await page.fill('#dataSearch', 'Data strategy');
+  const searchRows = await page.locator('#dataTable tbody tr').count();
+  await page.fill('#dataSearch', ''); await page.selectOption('#dataFilter', 'all');
+  await page.screenshot({ path: path.join(out, 'tab-data.png') });
+  await page.click('.helpLink[data-help="help-layout"]');
+  const helpVisible = await page.isVisible('#help-layout');
+  await page.screenshot({ path: path.join(out, 'tab-help.png') });
+  await page.click('.mainTabs [data-tab="roadmap"]');
+  console.log('data tab rows:', dataRows, '| chips:', [...new Set(chips)].join(','), '| skipped:', skippedRows, '| search:', searchRows, '| help visible:', helpVisible);
+  if (!dataRows || !helpVisible || searchRows !== 1) { console.error('Tab checks failed'); process.exitCode = 1; }
 
   // Exports
   const [png] = await Promise.all([page.waitForEvent('download'), page.click('#btnPng')]);

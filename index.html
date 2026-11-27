@@ -15,6 +15,7 @@
       <span>Roadmap Studio</span>
       <span class="badge" title="Files are parsed in your browser. This page blocks all network requests.">Processed locally · nothing uploaded</span>
     </div>
+    <button id="btnOpen" class="openBtn" title="Open a monday.com Excel or CSV export (you can also drag it onto the page)">Open file…</button>
     <div class="presets" id="presetBar" role="group" aria-label="Preset"></div>
     <div class="exports">
       <label class="inline">Scale
@@ -33,9 +34,14 @@
 
   <div class="app">
     <aside class="sidebar" id="sidebar">
+      <div class="sideTabs" role="tablist" aria-label="Settings">
+        <button role="tab" data-side="setup" aria-selected="true">Data setup</button>
+        <button role="tab" data-side="design" aria-selected="false">Design</button>
+      </div>
+      <div class="sidePane" data-pane="setup">
       <!-- DATA -->
       <details open>
-        <summary>Data</summary>
+        <summary>Data <button class="helpLink" data-help="help-data" title="Help: loading data">?</button></summary>
         <div class="dropzone" id="dropzone" tabindex="0">
           <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt" hidden>
           <strong>Drop a monday.com export</strong>
@@ -46,7 +52,7 @@
         <div id="dataControls" hidden>
           <label>Sheet <select id="sheetSelect"></select></label>
           <label>Format <select id="adapterSelect"></select></label>
-          <div class="subhead">Column mapping <span class="hint">(auto-detected — adjust if needed)</span></div>
+          <div class="subhead">Column mapping <button class="helpLink" data-help="help-mapping" title="Help: column mapping">?</button> <span class="hint">auto-detected; adjust if needed</span></div>
           <div class="mapping" id="mapping"></div>
           <label>Ambiguous dates
             <select id="datePref">
@@ -62,17 +68,15 @@
               <option value="never">Hide</option>
             </select>
           </label>
-          <details class="inner">
-            <summary>Preview of the data read</summary>
-            <p class="hint">First rows as understood by the app. Highlighted columns are used for the chart.</p>
-            <div id="tablePreview" class="tablePreview"></div>
-          </details>
+          <button class="secondary wide" data-goto-tab="data">View loaded data →</button>
         </div>
       </details>
+      </div>
+      <div class="sidePane" data-pane="design" hidden>
 
       <!-- LAYOUT -->
       <details open>
-        <summary>Layout</summary>
+        <summary>Layout <button class="helpLink" data-help="help-layout" title="Help: layout">?</button></summary>
         <label>Canvas
           <select data-bind="canvas.mode">
             <option value="slide">16:9 slide (1920×1080)</option>
@@ -111,7 +115,7 @@
 
       <!-- WORKSTREAMS -->
       <details open>
-        <summary>Workstreams</summary>
+        <summary>Workstreams <button class="helpLink" data-help="help-workstreams" title="Help: workstreams">?</button></summary>
         <label>Heading style
           <select data-bind="workstream.style">
             <option value="band">Coloured band on the left</option>
@@ -137,7 +141,7 @@
 
       <!-- TIMELINE -->
       <details>
-        <summary>Date range &amp; timescale</summary>
+        <summary>Date range &amp; timescale <button class="helpLink" data-help="help-range" title="Help: date range and timescale">?</button></summary>
         <label>Range
           <select data-bind="range.mode">
             <option value="auto">Automatic (fit to data)</option>
@@ -160,7 +164,7 @@
 
       <!-- LABELS -->
       <details>
-        <summary>Labels</summary>
+        <summary>Labels <button class="helpLink" data-help="help-labels" title="Help: labels">?</button></summary>
         <label class="check"><input type="checkbox" data-bind="labels.activities"> Activity labels</label>
         <label data-show="labels.activities=true">Label position
           <select data-bind="labels.position">
@@ -176,7 +180,7 @@
 
       <!-- MILESTONES -->
       <details>
-        <summary>Milestones</summary>
+        <summary>Milestones <button class="helpLink" data-help="help-milestones" title="Help: milestones">?</button></summary>
         <label class="check"><input type="checkbox" data-bind="milestones.show"> Show milestones</label>
         <label>Placement
           <select data-bind="milestones.placement">
@@ -191,7 +195,7 @@
 
       <!-- TODAY -->
       <details>
-        <summary>Today marker</summary>
+        <summary>Today marker <button class="helpLink" data-help="help-today" title="Help: today marker">?</button></summary>
         <label class="check"><input type="checkbox" data-bind="today.show"> Show today marker</label>
         <label class="check"><input type="checkbox" data-bind="today.label"> “Today” label</label>
         <label class="colour">Colour <input type="color" data-bind="today.colour"></label>
@@ -200,7 +204,7 @@
 
       <!-- COLOURS -->
       <details>
-        <summary>Colours</summary>
+        <summary>Colours <button class="helpLink" data-help="help-colours" title="Help: colours">?</button></summary>
         <label>Palette <select data-bind="colours.palette" id="paletteSelect"></select></label>
         <label class="check"><input type="checkbox" data-bind="colours.byStatus"> Colour bars by status</label>
         <label class="colour">Background <input type="color" data-bind="colours.background"></label>
@@ -211,11 +215,30 @@
       </details>
 
       <div class="foot">
-        <button id="btnReset" class="link">Reset all settings</button>
+        <button id="btnReset" class="link" title="Return every design setting to the PowerPoint preset defaults">Reset all settings</button>
+      </div>
       </div>
     </aside>
 
     <main class="stage" id="stage">
+      <nav class="mainTabs" role="tablist" aria-label="View">
+        <button role="tab" data-tab="roadmap" aria-selected="true">Roadmap</button>
+        <button role="tab" data-tab="data" aria-selected="false">Loaded data <span id="dataCount" class="count"></span></button>
+        <button role="tab" data-tab="help" aria-selected="false">Help</button>
+      </nav>
+
+      <section class="tabPane" data-tabpane="roadmap">
+      <div class="toolbar" id="roadmapToolbar" hidden>
+        <span id="statusLine" class="status"></span>
+        <label class="inline" title="Preview size only; exports are always full resolution">Zoom
+          <select id="zoom">
+            <option value="fit" selected>Fit to window</option>
+            <option value="0.5">50%</option>
+            <option value="0.75">75%</option>
+            <option value="1">100%</option>
+          </select>
+        </label>
+      </div>
       <div id="warnings" class="warnings" hidden></div>
       <div class="canvasWrap" id="canvasWrap">
         <div id="empty" class="empty">
@@ -228,6 +251,7 @@
             </ol>
             <p class="hint">Your file is read in this browser tab only. The page blocks all network access.</p>
             <button id="btnSample2" class="primary">Try with sample data</button>
+            <button class="link" data-goto-tab="help">How it works</button>
           </div>
         </div>
         <div id="diag" class="empty" hidden>
@@ -237,10 +261,157 @@
             <p class="hint">What the app found (column titles and a few date values only, no activity names):</p>
             <pre id="diagText" class="diagText"></pre>
             <button id="btnCopyDiag">Copy these details</button>
+            <button class="primary" data-goto-tab="data">See each row in Loaded data</button>
           </div>
         </div>
         <div id="preview" class="preview" hidden></div>
       </div>
+      </section>
+
+      <section class="tabPane" data-tabpane="data" hidden>
+        <div id="dataEmpty" class="emptyCard slim"><h2>No data loaded yet</h2><p>Open a monday.com export (or try the sample data) and every row will be listed here, with what happened to it.</p></div>
+        <div id="dataView" hidden>
+          <div class="toolbar">
+            <input type="search" id="dataSearch" placeholder="Search rows…" aria-label="Search rows">
+            <label class="inline">Show
+              <select id="dataFilter">
+                <option value="all">All rows</option>
+                <option value="plotted">On the roadmap</option>
+                <option value="milestone">Milestones only</option>
+                <option value="skipped">Not on the roadmap</option>
+                <option value="sub">Subitems only</option>
+              </select>
+            </label>
+            <label class="inline check"><input type="checkbox" id="dataAllCols"> All columns</label>
+            <span id="dataSummary" class="status"></span>
+          </div>
+          <p class="hint">Highlighted columns are the ones mapped to the chart (change them under Data setup → Column mapping). Start and End show the dates as the app read them.</p>
+          <div class="dataTableWrap" id="dataTable"></div>
+        </div>
+      </section>
+
+      <section class="tabPane help" data-tabpane="help" hidden>
+        <div class="helpDoc">
+          <h1>How to use Roadmap Studio</h1>
+          <p class="lead">Load a monday.com export, pick a preset, adjust the look, then export a PNG or SVG for your slides. Everything happens in this browser tab: your file is never uploaded.</p>
+          <nav class="helpToc">
+            <a href="#help-start">Quick start</a><a href="#help-data">Loading data</a><a href="#help-mapping">Column mapping</a><a href="#help-loaded">Loaded data tab</a><a href="#help-presets">Presets</a><a href="#help-layout">Layout</a><a href="#help-workstreams">Workstreams</a><a href="#help-range">Date range</a><a href="#help-labels">Labels</a><a href="#help-milestones">Milestones</a><a href="#help-today">Today marker</a><a href="#help-colours">Colours</a><a href="#help-export">Exporting</a><a href="#help-trouble">Troubleshooting</a><a href="#help-privacy">Privacy</a>
+          </nav>
+
+          <h2 id="help-start">Quick start</h2>
+          <ol>
+            <li>In monday.com, open your board or Gantt view and choose <strong>Export → Export to Excel</strong> (CSV also works).</li>
+            <li>Click <strong>Open file…</strong> at the top, or drag the file anywhere onto this page.</li>
+            <li>Check the chart on the <strong>Roadmap</strong> tab. If something is missing, look at the <strong>Loaded data</strong> tab to see why.</li>
+            <li>Choose a preset (<strong>PowerPoint</strong> or <strong>Detailed</strong>) and fine-tune under <strong>Design</strong>.</li>
+            <li>Click <strong>Export PNG</strong>, <strong>Export SVG</strong> or <strong>Copy</strong>, then paste or insert it into PowerPoint.</li>
+          </ol>
+
+          <h2 id="help-data">Loading data <small>Data setup tab</small></h2>
+          <p>The app reads the file, tries every sheet with every known export format, and keeps whichever plots the most activities. Usually you don't need to change anything here.</p>
+          <dl>
+            <dt>Open file / drop area</dt><dd>Loads an .xlsx, .xls, .csv or .tsv file. Loading a new file replaces the current one.</dd>
+            <dt>Try with sample data</dt><dd>Loads a built-in example programme so you can explore the controls.</dd>
+            <dt>File summary</dt><dd>Shows how many workstreams and items were plotted, how many were skipped and why, and the date span found.</dd>
+            <dt>Sheet</dt><dd>Only shown when the file has several sheets. Pick the one holding your board if the automatic choice is wrong.</dd>
+            <dt>Format</dt><dd><em>monday.com board / Gantt export</em> understands group titles (which become workstreams), repeated header rows and subitem blocks. <em>Generic table</em> treats the sheet as one plain table with a single header row.</dd>
+            <dt>Ambiguous dates</dt><dd>How to read dates like 03/04/2026: UK (3 April) or US (4 March). Unambiguous dates and Excel dates are always read correctly.</dd>
+            <dt>Treat single-day items as milestones</dt><dd>When on, an item whose start and end are the same day is drawn as a diamond ◆. Everything longer is a bar.</dd>
+            <dt>Subitems</dt><dd><em>Auto</em> shows subitems only where the parent has no dates of its own (the parent is then drawn as a summary bar across them). <em>Always show</em> draws every dated subitem under its parent as a slimmer, lighter bar. <em>Hide</em> leaves them out.</dd>
+          </dl>
+
+          <h2 id="help-mapping">Column mapping</h2>
+          <p>Tells the app which column holds what. It is filled in automatically; change a drop-down if the chart looks wrong.</p>
+          <dl>
+            <dt>Workstream</dt><dd>Groups the rows into swimlanes. <em>monday.com group</em> uses the board's group titles.</dd>
+            <dt>Activity</dt><dd>The item name shown on each bar or milestone.</dd>
+            <dt>Timeline</dt><dd>A single column holding a range such as <code>2026-01-06 - 2026-02-14</code>.</dd>
+            <dt>Start date / End date</dt><dd>Separate start and end columns, e.g. monday.com's <em>Timeline - Start</em> and <em>Timeline - End</em>. Used when there is no Timeline value.</dd>
+            <dt>Single date</dt><dd>A one-date column such as <em>Date</em> or <em>Due date</em>, used when an item has no start or end. These items become milestones.</dd>
+            <dt>Milestone flag</dt><dd>Optional. A column containing "Milestone", "Yes" or a tick marks items as milestones whatever their dates.</dd>
+            <dt>Status</dt><dd>Optional. Used when <em>Colour bars by status</em> is on (Design → Colours).</dd>
+          </dl>
+
+          <h2 id="help-loaded">Loaded data tab</h2>
+          <p>Lists every row read from your file and what happened to it: <span class="chip plotted">Bar</span> <span class="chip milestone">Milestone</span> <span class="chip summary">Summary</span> are on the roadmap; <span class="chip skipped">No dates</span> <span class="chip skipped">Subitem hidden</span> <span class="chip skipped">Workstream hidden</span> are not. Use the search box and the <em>Show</em> filter to find rows, and tick <em>All columns</em> to see every column from the file.</p>
+
+          <h2 id="help-presets">Presets <small>top bar</small></h2>
+          <dl>
+            <dt>PowerPoint</dt><dd>A 16:9 image (1920×1080) with the top 15% left empty for the slide title. Rows are shared where possible and the layout shrinks or grows to fit the slide. Place it as a full-slide picture and type the title in PowerPoint's title box.</dd>
+            <dt>Detailed</dt><dd>One activity per row, dates on every bar; the image grows taller to fit everything. Good for appendices and documents.</dd>
+            <dt>Custom</dt><dd>Selected automatically when you change any layout setting. Click a preset again to go back to its defaults.</dd>
+          </dl>
+
+          <h2 id="help-layout">Layout <small>Design tab</small></h2>
+          <dl>
+            <dt>Canvas</dt><dd><em>16:9 slide</em> keeps a fixed slide shape. <em>Auto height</em> uses the width you set and grows as tall as needed.</dd>
+            <dt>Title space</dt><dd>How much of the slide's top is kept free for the PowerPoint title. The dashed guide shows it in the preview but is never exported.</dd>
+            <dt>Fit content to slide</dt><dd>Adjusts row height (and if needed text size) so everything fits. The note under the Layout section shows the sizes used.</dd>
+            <dt>Include a title in the image</dt><dd>Writes a title into the image itself, for when you're not using a slide title.</dd>
+            <dt>Font, Font size</dt><dd>Text style for the whole chart. Choose the font your slides use.</dd>
+            <dt>Row height, Bar thickness</dt><dd>Space per row, and how much of it the bar fills.</dd>
+            <dt>Workstream spacing, Margin</dt><dd>Gap between workstreams, and the empty border around the chart.</dd>
+            <dt>Rows</dt><dd><em>Compact</em> lets activities share a row when they don't overlap (best for slides). <em>One activity per row</em> lists them like a classic Gantt.</dd>
+            <dt>Sort activities by start date</dt><dd>Off keeps the order from your file.</dd>
+          </dl>
+
+          <h2 id="help-workstreams">Workstreams <small>Design tab</small></h2>
+          <dl>
+            <dt>Heading style</dt><dd>A coloured band on the left with the name centred, or a centred heading row above each workstream.</dd>
+            <dt>Band width, Heading size</dt><dd>Size of the workstream name area and its text.</dd>
+            <dt>Tinted workstream rows</dt><dd>A light tint of each workstream's colour behind its rows.</dd>
+            <dt>Summary line / Group style</dt><dd>How a parent item and its subitems are tied together: a thin line across the parent's row spanning its subitems, plus an outline, connector lines, a side rail, a shaded band, or nothing.</dd>
+            <dt>Workstream list</dt><dd>Tick to show or hide a workstream, use the colour swatch to recolour it, and ▲ ▼ to reorder.</dd>
+          </dl>
+
+          <h2 id="help-range">Date range &amp; timescale <small>Design tab</small></h2>
+          <dl>
+            <dt>Range</dt><dd><em>Automatic</em> fits the data (whole months, or whole weeks for short plans). <em>Custom months</em> lets you set the first and last month shown; items outside are left out.</dd>
+            <dt>Timescale</dt><dd>The column headings: weeks, months or quarters. Automatic picks one that suits the length of the plan.</dd>
+          </dl>
+
+          <h2 id="help-labels">Labels <small>Design tab</small></h2>
+          <dl>
+            <dt>Activity labels, Label position</dt><dd><em>Auto</em> puts the name inside the bar when it fits and beside it when it doesn't. Labels outside a bar always use the dark text colour, so they never disappear.</dd>
+            <dt>Show dates</dt><dd>Adds start–end dates to activities, and the date to milestones.</dd>
+          </dl>
+
+          <h2 id="help-milestones">Milestones <small>Design tab</small></h2>
+          <dl>
+            <dt>Placement</dt><dd>Inside each workstream, or gathered in a <em>Key milestones</em> row at the top.</dd>
+            <dt>Size, Colour</dt><dd>Diamond size, and one colour for all milestones or each workstream's own colour.</dd>
+          </dl>
+
+          <h2 id="help-today">Today marker <small>Design tab</small></h2>
+          <p>A dashed line at today's date with a "Today" label. Use <em>Date override</em> to show a different date, such as a reporting date.</p>
+
+          <h2 id="help-colours">Colours <small>Design tab</small></h2>
+          <dl>
+            <dt>Palette</dt><dd>Workstream colours. Individual workstreams can be recoloured in the Workstreams list.</dd>
+            <dt>Colour bars by status</dt><dd>Colours bars by the mapped Status column (done, in progress, stuck, not started) and adds a legend.</dd>
+            <dt>Background, Text, Secondary text, Gridlines</dt><dd>Page colours. If a text colour would be unreadable on the background, the app picks a readable one.</dd>
+          </dl>
+
+          <h2 id="help-export">Exporting <small>top bar</small></h2>
+          <dl>
+            <dt>Scale</dt><dd>PNG size multiplier: 3× turns a 1920×1080 slide into 5760×3240 pixels, sharp on any projector.</dd>
+            <dt>Export PNG</dt><dd>Downloads a picture file. The dashed title guide is not included.</dd>
+            <dt>Export SVG</dt><dd>Downloads a vector file that stays sharp at any size. Recent PowerPoint versions can insert it and even convert it to editable shapes.</dd>
+            <dt>Copy</dt><dd>Copies the PNG to the clipboard so you can paste it straight into PowerPoint.</dd>
+          </dl>
+
+          <h2 id="help-trouble">Troubleshooting</h2>
+          <dl>
+            <dt>"Nothing could be plotted"</dt><dd>Open the <strong>Loaded data</strong> tab to see each row's status. Most often the dates are in a column that isn't mapped (fix under Column mapping), or the dates are only on subitems (set Subitems to <em>Always show</em>). <em>Copy these details</em> gives a summary you can share, with no item names.</dd>
+            <dt>An item is missing</dt><dd>Find it in <strong>Loaded data</strong>: it may have no dates, be a hidden subitem, sit in a hidden workstream, or fall outside a custom date range.</dd>
+            <dt>Dates are a month out</dt><dd>Switch <em>Ambiguous dates</em> between UK and US.</dd>
+            <dt>The slide is too crowded</dt><dd>Hide some workstreams, use compact rows, show milestones in the Key milestones row, or switch to the Detailed preset for an appendix.</dd>
+          </dl>
+
+          <h2 id="help-privacy">Privacy</h2>
+          <p>Your file is read inside this browser tab and is never uploaded. The page blocks all network requests. Only layout and colour preferences are remembered in this browser; nothing from your file is stored.</p>
+        </div>
+      </section>
     </main>
   </div>
 

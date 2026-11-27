@@ -114,7 +114,253 @@
     const w = $('#warnings');
     w.hidden = !warn.length;
     w.textContent = warn.join(' ');
+    $('#roadmapToolbar').hidden = !has;
+    if (has) {
+      const st = state.model.stats;
+      const shown = state.model.workstreams.filter((ws) => !state.style.hidden[ws.name]).length;
+      $('#statusLine').textContent = `${state.fileName} · ${shown} of ${state.model.workstreams.length} workstreams · ${st.used} items (${st.milestones} milestones)`;
+      applyZoom();
+    }
+    updateDataCount();
+    dataDirty = true;
+    if (activeTab === 'data') renderDataTable();
     saveStyle();
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Tabs, zoom and help                                               */
+  /* ---------------------------------------------------------------- */
+  let activeTab = 'roadmap';
+  let dataDirty = true;
+
+  function showTab(tab) {
+    activeTab = tab;
+    $$('.mainTabs [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+    $$('[data-tabpane]').forEach((p) => { p.hidden = p.dataset.tabpane !== tab; });
+    if (tab === 'data' && dataDirty) renderDataTable();
+  }
+
+  function showSidePane(pane) {
+    $$('.sideTabs [data-side]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.side === pane)));
+    $$('.sidePane').forEach((p) => { p.hidden = p.dataset.pane !== pane; });
+  }
+
+  function openHelp(id) {
+    showTab('help');
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ block: 'start' });
+      el.classList.remove('flash');
+      void el.offsetWidth; // restart the highlight animation
+      el.classList.add('flash');
+    }
+  }
+
+  function applyZoom() {
+    const pv = $('#preview');
+    const z = $('#zoom').value;
+    const svg = pv.querySelector('svg');
+    if (!svg) return;
+    if (z === 'fit') { pv.classList.remove('zoomed'); pv.style.width = ''; }
+    else { pv.classList.add('zoomed'); pv.style.width = `${Math.round(svg.viewBox.baseVal.width * Number(z))}px`; }
+  }
+
+  function initTabs() {
+    $$('.mainTabs [data-tab]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+    $$('[data-goto-tab]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.gotoTab)));
+    $$('.sideTabs [data-side]').forEach((b) => b.addEventListener('click', () => showSidePane(b.dataset.side)));
+    $$('.helpLink').forEach((b) => b.addEventListener('click', (e) => {
+      e.preventDefault(); // don't toggle the section it sits in
+      e.stopPropagation();
+      openHelp(b.dataset.help);
+    }));
+    $$('.helpToc a').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); openHelp(a.getAttribute('href').slice(1)); }));
+    $('#zoom').addEventListener('change', applyZoom);
+    $('#btnOpen').addEventListener('click', () => $('#fileInput').click());
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Loaded data tab: every row and what happened to it                */
+  /* ---------------------------------------------------------------- */
+  const STATUS_LABEL = {
+    bar: 'Bar', milestone: 'Milestone', summary: 'Summary', 'no-dates': 'No dates',
+    'sub-hidden': 'Subitem hidden', 'ws-hidden': 'Workstream hidden', 'out-of-range': 'Outside date range',
+  };
+  const STATUS_TIP = {
+    bar: 'Drawn as an activity bar',
+    milestone: 'Drawn as a milestone (start and end on the same day)',
+    summary: 'Has no dates of its own; drawn as a summary bar across its subitems',
+    'no-dates': 'No readable date in the mapped date columns, so it is not drawn',
+    'sub-hidden': 'A subitem hidden by the Subitems setting (Data setup)',
+    'ws-hidden': 'Its workstream is hidden (Design → Workstreams)',
+    'out-of-range': 'Outside the custom date range (Design → Date range)',
+  };
+
+  function wsNameOf(row) {
+    const m = state.mapping;
+    if (!m.workstream) return 'All activities';
+    const v = m.workstream === '__group' ? row.__group : row[m.workstream];
+    return U.isBlank(v) ? 'Other' : String(v).trim();
+  }
+
+  function rowEntries() {
+    const t = state.table, model = state.model;
+    if (!t || !model) return [];
+    const range = RM.render.resolveRange(model, state.style);
+    const custom = state.style.range.mode === 'custom';
+    const out = [];
+    t.rows.forEach((row, i) => {
+      const o = model.outcomes[i] || { status: 'no-name' };
+      if (o.status === 'no-name') return; // blank/summary rows from the export
+      let key = o.status;
+      if (o.item) {
+        key = o.status === 'summary' ? 'summary' : (o.item.milestone ? 'milestone' : 'bar');
+        const ws = wsNameOf(row);
+        if (state.style.hidden[ws]) key = 'ws-hidden';
+        else if (custom && (o.item.end < range.start || o.item.start >= range.end)) key = 'out-of-range';
+      }
+      out.push({ row, key, item: o.item || null, onChart: ['bar', 'milestone', 'summary'].includes(key) });
+    });
+    return out;
+  }
+
+  function updateDataCount() {
+    const n = state.model ? state.model.outcomes.filter((o) => o && o.status !== 'no-name').length : 0;
+    $('#dataCount').textContent = n ? String(n) : '';
+  }
+
+  function renderDataTable() {
+    dataDirty = false;
+    const has = !!state.table;
+    $('#dataEmpty').hidden = has;
+    $('#dataView').hidden = !has;
+    if (!has) return;
+    const m = state.mapping;
+    const all = rowEntries();
+    const q = $('#dataSearch').value.trim().toLowerCase();
+    const filter = $('#dataFilter').value;
+    const rows = all.filter((e) => {
+      if (filter === 'plotted' && !e.onChart) return false;
+      if (filter === 'milestone' && e.key !== 'milestone') return false;
+      if (filter === 'skipped' && e.onChart) return false;
+      if (filter === 'sub' && !e.row.__isSub) return false;
+      if (q && !Object.keys(e.row).some((k) => !k.startsWith('__') && e.row[k] != null && String(e.row[k]).toLowerCase().includes(q)) && !String(e.row.__group || '').toLowerCase().includes(q)) return false;
+      return true;
+    });
+    const on = all.filter((e) => e.onChart).length;
+    $('#dataSummary').textContent = `${rows.length} of ${all.length} rows shown · ${on} on the roadmap · ${all.length - on} not`;
+
+    const mapped = new Set(Object.values(m).filter((v) => v && v !== '__group'));
+    const rawCols = $('#dataAllCols').checked ? state.table.columns : state.table.columns.filter((c) => mapped.has(c) && c !== m.name);
+    const tbl = document.createElement('table');
+    const hr = tbl.createTHead().insertRow();
+    const th = (txt, cls, tip) => { const c = document.createElement('th'); c.textContent = txt; if (cls) c.className = cls; if (tip) c.title = tip; hr.appendChild(c); };
+    th('Status'); th('Workstream'); th('Activity', 'mapped', `Column: ${m.name || '(none)'}`); th('Start', 'derived', 'Start date as read by the app'); th('End', 'derived', 'End date as read by the app');
+    rawCols.forEach((c) => th(c, mapped.has(c) ? 'mapped' : '', mapped.has(c) ? 'Used for the chart' : 'Not used for the chart'));
+    const body = tbl.createTBody();
+    const LIMIT = 2000;
+    rows.slice(0, LIMIT).forEach((e) => {
+      const tr = body.insertRow();
+      if (e.row.__isSub) tr.className = 'sub';
+      const chip = document.createElement('span');
+      chip.className = `chip ${e.onChart ? e.key : 'skipped'}`;
+      chip.textContent = STATUS_LABEL[e.key] || e.key;
+      chip.title = STATUS_TIP[e.key] || '';
+      tr.insertCell().appendChild(chip);
+      tr.insertCell().textContent = wsNameOf(e.row);
+      const name = tr.insertCell();
+      name.className = 'name';
+      name.textContent = (e.row.__isSub ? '↳ ' : '') + String(e.row[m.name] ?? '');
+      tr.insertCell().textContent = e.item ? U.formatDay(e.item.start) : '';
+      tr.insertCell().textContent = e.item ? U.formatDay(e.item.end) : '';
+      rawCols.forEach((c) => {
+        const td = tr.insertCell();
+        const v = e.row[c];
+        td.textContent = v === null || v === undefined ? '' : String(v);
+        if (mapped.has(c)) td.className = 'mapped';
+      });
+    });
+    const box = $('#dataTable');
+    box.innerHTML = '';
+    box.appendChild(tbl);
+    if (rows.length > LIMIT) {
+      const p = document.createElement('p');
+      p.className = 'hint';
+      p.textContent = `Showing the first ${LIMIT} rows. Use search or the filter to narrow down.`;
+      box.appendChild(p);
+    }
+  }
+
+  function initDataTab() {
+    $('#dataSearch').addEventListener('input', renderDataTable);
+    $('#dataFilter').addEventListener('change', renderDataTable);
+    $('#dataAllCols').addEventListener('change', renderDataTable);
+  }
+
+  /* Short explanations shown when hovering a control */
+  const TIPS = {
+    'canvas.mode': 'Fixed 16:9 slide, or a chosen width with the height growing to fit',
+    'canvas.width': 'Image width in pixels (Auto height canvas only)',
+    'canvas.titleSpace': 'Share of the slide height kept empty at the top for the PowerPoint title',
+    'canvas.fit': 'Grow or shrink rows (and text if needed) so everything fits the slide',
+    'canvas.showTitleGuide': 'Dashed box showing the title space; never included in exports',
+    'canvas.showTitle': 'Write a title into the image itself',
+    'canvas.title': 'Title text written into the image',
+    fontFamily: 'Font for all chart text; pick the one your slides use',
+    fontSize: 'Base text size for activity labels and the timeline',
+    rowHeight: 'Height of each row',
+    barThickness: 'How much of the row height a bar fills',
+    workstreamGap: 'Space between workstreams',
+    'canvas.padding': 'Empty border around the chart',
+    packing: 'Compact lets activities share a row when they do not overlap',
+    sortByStart: 'Order activities by start date (off keeps the file order)',
+    'workstream.style': 'How workstream names are shown',
+    'workstream.width': 'Width of the coloured name band',
+    'workstream.fontSize': 'Text size of workstream names',
+    'workstream.stripes': 'Light tint of each workstream colour behind its rows',
+    'groups.summaryLine': 'Thin line on a parent row spanning all its subitems',
+    'groups.style': 'How a parent and its subitems are visually grouped',
+    'range.mode': 'Fit the dates in the data, or choose the months shown',
+    'range.start': 'First month shown',
+    'range.end': 'Last month shown',
+    timescale: 'Column headings across the top: weeks, months or quarters',
+    'labels.activities': 'Show names on or beside bars',
+    'labels.position': 'Auto puts the name inside the bar when it fits, otherwise beside it',
+    'labels.dates': 'Add start and end dates to activity labels',
+    'labels.milestones': 'Show milestone names',
+    'labels.milestoneDates': 'Add the date to milestone labels',
+    'milestones.show': 'Draw one-day items as diamonds',
+    'milestones.placement': 'Within each workstream, or a Key milestones row at the top',
+    'milestones.size': 'Diamond size',
+    'milestones.useWorkstreamColour': 'Colour each diamond with its workstream colour',
+    'milestones.colour': 'Colour for all milestone diamonds',
+    'today.show': 'Dashed line at today (or the override date)',
+    'today.label': 'Small "Today" tag above the line',
+    'today.colour': 'Colour of the today line',
+    'today.date': 'Show the marker on a different date, e.g. a reporting date',
+    'colours.palette': 'Set of workstream colours',
+    'colours.byStatus': 'Colour bars by the Status column and add a legend',
+    'colours.background': 'Image background colour',
+    'colours.text': 'Main text colour',
+    'colours.muted': 'Colour for timeline headings and legend text',
+    'colours.grid': 'Colour of the vertical gridlines',
+  };
+  function applyTips() {
+    $$('[data-bind]').forEach((el) => {
+      const tip = TIPS[el.dataset.bind];
+      if (tip) (el.closest('label') || el).title = tip;
+    });
+    const byId = {
+      sheetSelect: 'Which sheet of the workbook to use',
+      adapterSelect: 'How to read the sheet: monday.com board layout, or a plain table',
+      datePref: 'How to read dates such as 03/04/2026',
+      singleDayMs: 'Items that start and end on the same day become milestones',
+      subitemsMode: 'Auto shows subitems only where the parent has no dates',
+      pngScale: 'PNG size multiplier (3× = 5760×3240 for a slide)',
+      btnPng: 'Download a high-resolution PNG',
+      btnSvg: 'Download a scalable SVG (insert into PowerPoint, or convert to shapes)',
+    };
+    Object.entries(byId).forEach(([id, tip]) => { const el = document.getElementById(id); if (el) (el.closest('label') || el).title = tip; });
   }
 
   /* ---------------------------------------------------------------- */
@@ -309,6 +555,7 @@
   }
 
   function applyAnalysis(best, isNewFile) {
+    if (isNewFile && activeTab === 'help') showTab('roadmap');
     state.detectedAdapter = best.adapterId;
     state.table = best.table;
     state.mapping = best.mapping;
@@ -324,7 +571,6 @@
 
   function rebuildModel() {
     state.model = RM.mapping.buildModel(state.table, state.mapping, state.dataOpts);
-    renderDataPreview();
     renderWsList();
     renderFileInfo();
     schedule();
@@ -361,34 +607,6 @@
     else reasons.push('Date columns were found, but none of the items had dates that could be read. Check the date columns in the Data panel, or switch <em>Subitems</em> to <em>Always show</em> if the dates are on subitems.');
     $('#diagReason').innerHTML = reasons.join('<br>');
     $('#diagText').textContent = diagnosticsText();
-  }
-
-  function renderDataPreview() {
-    const box = $('#tablePreview');
-    box.innerHTML = '';
-    if (!state.table || !state.table.rows.length) { box.textContent = 'No rows.'; return; }
-    const used = new Set(Object.values(state.mapping).filter(Boolean));
-    const cols = ['__group'].concat(state.table.columns).filter((c) => c !== '__group' || state.table.meta.groupsDetected);
-    const tbl = document.createElement('table');
-    const head = tbl.createTHead().insertRow();
-    cols.forEach((c) => {
-      const th = document.createElement('th');
-      th.textContent = c === '__group' ? '(group)' : c;
-      if (used.has(c)) th.className = 'mapped';
-      head.appendChild(th);
-    });
-    const body = tbl.createTBody();
-    state.table.rows.slice(0, 12).forEach((r) => {
-      const tr = body.insertRow();
-      if (r.__isSub) tr.className = 'sub';
-      cols.forEach((c) => {
-        const td = tr.insertCell();
-        const v = r[c];
-        td.textContent = v === null || v === undefined ? '' : String(v);
-        if (used.has(c)) td.className = 'mapped';
-      });
-    });
-    box.appendChild(tbl);
   }
 
   function renderAdapterSelect() {
@@ -538,6 +756,9 @@
     initData();
     initExport();
     initReset();
+    initTabs();
+    initDataTab();
+    applyTips();
     $('#btnCopyDiag').addEventListener('click', async () => {
       try { await navigator.clipboard.writeText($('#diagText').textContent); toast('Copied'); }
       catch (e) { toast('Select the text and copy it manually', 4000); }
