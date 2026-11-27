@@ -203,20 +203,89 @@
       }
     }
 
-    // Lane packing
-    const laneRight = [];
-    const sep = fs * 0.9;
-    items.forEach((it, idx) => {
-      let lane;
-      if (style.packing === 'single') lane = idx;
-      else {
-        lane = laneRight.findIndex((r) => r + sep <= it.g.left);
-        if (lane < 0) lane = laneRight.length;
+    // Families: a parent item plus its subitems are laid out as one unit so they
+    // stay together, and can be drawn with a summary line and a group panel.
+    const kids = new Map();
+    items.forEach((it) => {
+      if (it.isSub && it.parentId != null) {
+        if (!kids.has(it.parentId)) kids.set(it.parentId, []);
+        kids.get(it.parentId).push(it);
       }
-      laneRight[lane] = Math.max(laneRight[lane] || -Infinity, it.g.right);
-      it.g.lane = lane;
     });
-    return Math.max(1, laneRight.length);
+    const grouping = style.groups || {};
+    const panelPad = grouping.panel ? Math.max(4, fs * 0.45) : 0;
+    const units = [];
+    const families = [];
+    const inFamily = new Set();
+    for (const it of items) {
+      if (inFamily.has(it)) continue;
+      const children = kids.get(it.id);
+      if (!children || !children.length) { units.push({ members: [it] }); continue; }
+      const members = [it].concat(children);
+      members.forEach((m) => inFamily.add(m));
+      // Summary span: from the earliest to the latest point of parent + subitems
+      const pt = (m) => (m.milestone ? [m.g.cx, m.g.cx] : [m.g.x, m.g.x + m.g.w]);
+      let spanL = Infinity, spanR = -Infinity;
+      members.forEach((m) => { const [a, b] = pt(m); spanL = Math.min(spanL, a); spanR = Math.max(spanR, b); });
+      const pg = it.g;
+      const own = pt(it);
+      const fam = { parent: it, children, spanL, spanR, showLine: !!grouping.summaryLine && (spanL < own[0] - 0.5 || spanR > own[1] + 0.5) };
+      // A parent label that sits beside the parent should clear the summary line
+      if (fam.showLine && pg.label && !pg.label.inside) {
+        const tw = U.textWidth(pg.label.text, fs, family, 500);
+        if (pg.label.anchor === 'start') {
+          const lx = Math.max(pg.label.x, spanR + gap);
+          if (lx + tw <= x1) { pg.label.x = lx; }
+          else if (spanL - gap - tw >= x0) { pg.label = { ...pg.label, x: spanL - gap, anchor: 'end' }; }
+        } else if (pg.label.anchor === 'end') {
+          const lx = Math.min(pg.label.x, spanL - gap);
+          if (lx - tw >= x0) pg.label.x = lx;
+        }
+        pg.left = pg.label.anchor === 'end' ? pg.label.x - tw : Math.min(pg.left, spanL);
+        pg.right = pg.label.anchor === 'start' ? pg.label.x + tw : Math.max(pg.right, spanR);
+      }
+      pg.left = Math.min(pg.left, spanL);
+      pg.right = Math.max(pg.right, spanR);
+      families.push(fam);
+      units.push({ members, family: fam });
+    }
+
+    const sep = fs * 0.9;
+    const laneRight = [];
+    const fits = (lane, left) => laneRight[lane] === undefined || laneRight[lane] + sep <= left;
+    let next = 0; // for one-per-row packing
+    for (const u of units) {
+      const left = Math.min(...u.members.map((m) => m.g.left)) - panelPad;
+      const right = Math.max(...u.members.map((m) => m.g.right)) + panelPad;
+      // Lanes within the unit: parent on the first, subitems below it
+      const inner = [];
+      if (u.family) {
+        inner.push(0);
+        const childRight = [];
+        u.family.children.forEach((c) => {
+          let l = style.packing === 'single' ? childRight.length : childRight.findIndex((r) => r + sep <= c.g.left);
+          if (l < 0) l = childRight.length;
+          childRight[l] = Math.max(childRight[l] === undefined ? -Infinity : childRight[l], c.g.right);
+          inner.push(l + 1);
+        });
+      } else inner.push(0);
+      const h = Math.max(...inner) + 1;
+      let L;
+      if (style.packing === 'single') { L = next; next += h; }
+      else {
+        L = 0;
+        while (true) {
+          let ok = true;
+          for (let j = L; j < L + h; j++) if (!fits(j, left)) { ok = false; break; }
+          if (ok) break;
+          L++;
+        }
+      }
+      for (let j = L; j < L + h; j++) laneRight[j] = Math.max(laneRight[j] === undefined ? -Infinity : laneRight[j], right);
+      u.members.forEach((m, k) => { m.g.lane = L + inner[k]; });
+      if (u.family) Object.assign(u.family, { lane: L, lanes: h, left, right });
+    }
+    return { lanes: Math.max(1, laneRight.length, next), families };
   }
 
   function computeLayout(model, style, fs, rowH) {
@@ -271,7 +340,9 @@
     const headerRowH = band ? 0 : Math.round(wsFs * 2.1);
     let y = yBody;
     for (const b of blocks) {
-      b.lanes = b.items.length ? layoutItems(b.items, ctx) : 1;
+      const packed = b.items.length ? layoutItems(b.items, ctx) : { lanes: 1, families: [] };
+      b.lanes = packed.lanes;
+      b.families = packed.families;
       let h = b.lanes * rowH + innerPad * 2;
       if (band) {
         b.titleLines = U.wrapText(b.name, bandW - 20, wsFs, family, 600);
@@ -351,6 +422,10 @@
     const out = [];
     const warnings = [];
     const base = (s) => s + fs * 0.35; // baseline for vertically-centred text
+    // Top of a workstream's first lane (lanes are centred in the block if a wrapped title made it taller)
+    const lanesTop = (b) => b.y + b.headerH + L.innerPad + (b.h - b.headerH - L.innerPad * 2 - b.lanes * L.rowH) / 2;
+    const rowBgOf = (b) => (style.workstream.stripes ? U.mix(b.colour, bg, b.isKey ? 0.95 : 0.92) : bg);
+    const groupPanelFill = (b) => U.mix(rowBgOf(b), bg, 0.8);
 
     out.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${U.esc(family)}">`);
     out.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="${bg}"/>`);
@@ -420,6 +495,17 @@
       }
     }
 
+    // Group panels (parent item + subitems): under gridlines and the today marker
+    if (style.groups && style.groups.panel) {
+      for (const b of L.blocks) {
+        for (const f of b.families || []) {
+          const y0 = lanesTop(b) + f.lane * L.rowH + L.rowH * 0.06, h = f.lanes * L.rowH - L.rowH * 0.12;
+          const xa = Math.max(f.left, L.x0 - 4), xb = Math.min(f.right, L.x1 + 4);
+          out.push(`<rect x="${f1(xa)}" y="${f1(y0)}" width="${f1(xb - xa)}" height="${f1(h)}" rx="${f1(Math.min(8, L.rowH * 0.3))}" fill="${groupPanelFill(b)}" stroke="${U.mix(f.parent.wsColour, bg, 0.6)}" stroke-width="1"/>`);
+        }
+      }
+    }
+
     // Vertical gridlines over the body (bottom tier boundaries, stronger for top tier)
     const topStarts = new Set(tiers[0].map((c) => c.start));
     for (const c of tiers[1]) {
@@ -462,14 +548,29 @@
       out.push(text(lbl.x, base(cy), lbl.text, { 'font-size': f1(lfs), 'font-weight': 500, fill: ink, 'text-anchor': lbl.anchor }));
     };
     for (const b of L.blocks) {
-      const rowBg = style.workstream.stripes ? U.mix(b.colour, bg, b.isKey ? 0.95 : 0.92) : bg;
-      const top = b.y + b.headerH + L.innerPad;
-      // Vertically centre the lanes inside the block (block may be taller because of a wrapped title)
-      const lanesH = b.lanes * L.rowH;
-      const offset = (b.h - b.headerH - L.innerPad * 2 - lanesH) / 2;
+      const rowBg = rowBgOf(b);
+      const laneY = (lane) => lanesTop(b) + lane * L.rowH;
+      const labelBg = new Map(); // item id -> colour behind its label
+      // Group panels (parent + subitems) and summary lines, drawn under the bars
+      for (const f of b.families || []) {
+        if (style.groups && style.groups.panel) {
+          [f.parent].concat(f.children).forEach((m) => labelBg.set(m.id, groupPanelFill(b)));
+        }
+        if (f.showLine) {
+          // Summary bracket: thin bar across the whole group with small end ticks
+          const cy = laneY(f.lane) + L.rowH / 2;
+          const th = Math.max(2.5, Math.min(5, L.rowH * 0.12));
+          const tick = Math.max(4, L.rowH * 0.22);
+          const lc = U.mix(f.parent.wsColour, bg, 0.15);
+          out.push(`<rect x="${f1(f.spanL)}" y="${f1(cy - th / 2)}" width="${f1(f.spanR - f.spanL)}" height="${f1(th)}" fill="${lc}"/>`);
+          out.push(`<path d="M${f1(f.spanL)} ${f1(cy - th / 2)} l0 ${f1(th + tick)} l${f1(tick * 0.9)} ${f1(-tick)} Z" fill="${lc}"/>`);
+          out.push(`<path d="M${f1(f.spanR)} ${f1(cy - th / 2)} l0 ${f1(th + tick)} l${f1(-tick * 0.9)} ${f1(-tick)} Z" fill="${lc}"/>`);
+        }
+      }
       for (const it of b.items) {
         const g = it.g;
-        const cy = top + offset + g.lane * L.rowH + L.rowH / 2;
+        const cy = laneY(g.lane) + L.rowH / 2;
+        const lblBg = labelBg.get(it.id) || rowBg;
         let colour = it.wsColour;
         if (style.colours.byStatus && !it.milestone) {
           const sc = statusColour(it.status);
@@ -482,7 +583,7 @@
           if (U.contrastRatio(mc, bg) < 2) mc = ink; // never let a diamond vanish into the background
           const s = g.size / 2;
           out.push(`<path d="M${f1(g.cx)} ${f1(cy - s)} L${f1(g.cx + s)} ${f1(cy)} L${f1(g.cx)} ${f1(cy + s)} L${f1(g.cx - s)} ${f1(cy)} Z" fill="${mc}" stroke="${bg}" stroke-width="1.5"/>`);
-          if (g.label) backedLabel(g.label, cy, rowBg);
+          if (g.label) backedLabel(g.label, cy, lblBg);
           continue;
         }
 
@@ -495,7 +596,7 @@
           // Inside: contrast against the bar. Outside: page ink colour, never white-on-white.
           if (g.label.inside) {
             out.push(text(g.label.x, base(cy), g.label.text, { 'font-size': f1(lfs), 'font-weight': 500, fill: U.readableOn(colour, '#111827', '#FFFFFF'), 'text-anchor': g.label.anchor }));
-          } else backedLabel(g.label, cy, rowBg);
+          } else backedLabel(g.label, cy, lblBg);
         }
       }
     }

@@ -16,7 +16,7 @@
   };
 
   // Paths that are "content" rather than layout: changing them does not flip the preset to Custom
-  const KEEP_PRESET = ['canvas.title', 'canvas.showTitle', 'canvas.showTitleGuide', 'colours.', 'today.', 'range.'];
+  const KEEP_PRESET = ['canvas.title', 'canvas.showTitle', 'canvas.showTitleGuide', 'colours.', 'today.', 'range.', 'groups.'];
 
   const state = {
     sheets: null,
