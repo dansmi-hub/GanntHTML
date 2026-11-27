@@ -443,7 +443,6 @@
     // Top of a workstream's first lane (lanes are centred in the block if a wrapped title made it taller)
     const lanesTop = (b) => b.y + b.headerH + L.innerPad + (b.h - b.headerH - L.innerPad * 2 - b.lanes * L.rowH) / 2;
     const rowBgOf = (b) => (style.workstream.stripes ? U.mix(b.colour, bg, b.isKey ? 0.95 : 0.92) : bg);
-    const groupPanelFill = (b) => U.mix(rowBgOf(b), bg, 0.8);
     const groupBandFill = (b, c) => U.mix(c, rowBgOf(b), 0.84);
 
     out.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${U.esc(family)}">`);
@@ -521,8 +520,10 @@
         const y0 = lanesTop(b) + f.lane * L.rowH, h = f.lanes * L.rowH;
         const fc = f.parent.wsColour;
         if (gstyle === 'outline') {
-          const xa = Math.max(f.left, L.x0 - 4), xb = Math.min(f.right, L.x1 + 4);
-          out.push(`<rect x="${f1(xa)}" y="${f1(y0 + L.rowH * 0.06)}" width="${f1(xb - xa)}" height="${f1(h - L.rowH * 0.12)}" rx="${f1(Math.min(8, L.rowH * 0.3))}" fill="${groupPanelFill(b)}" stroke="${U.mix(fc, bg, 0.6)}" stroke-width="1"/>`);
+          // Hug the group's dates (first to last bar or milestone); longer labels run past the edge
+          const pad = Math.max(4, fs * 0.4);
+          const xa = Math.max(f.spanL - pad, L.x0 - 4), xb = Math.min(f.spanR + pad, L.x1 + 4);
+          out.push(`<rect x="${f1(xa)}" y="${f1(y0 + L.rowH * 0.08)}" width="${f1(xb - xa)}" height="${f1(h - L.rowH * 0.16)}" rx="${f1(Math.min(6, L.rowH * 0.25))}" fill="none" stroke="${U.mix(fc, bg, 0.55)}" stroke-width="1"/>`);
         } else if (gstyle === 'band') {
           const xa = L.band ? L.x0 - 6 : L.x0;
           out.push(`<rect x="${f1(xa)}" y="${f1(y0 + L.rowH * 0.04)}" width="${f1(L.x1 - xa)}" height="${f1(h - L.rowH * 0.08)}" rx="4" fill="${groupBandFill(b, fc)}"/>`);
@@ -580,8 +581,8 @@
       const labelBg = new Map(); // item id -> colour behind its label
       // Group panels (parent + subitems) and summary lines, drawn under the bars
       for (const f of b.families || []) {
-        if (gstyle === 'outline' || gstyle === 'band') {
-          const fill = gstyle === 'outline' ? groupPanelFill(b) : groupBandFill(b, f.parent.wsColour);
+        if (gstyle === 'band') {
+          const fill = groupBandFill(b, f.parent.wsColour);
           [f.parent].concat(f.children).forEach((m) => labelBg.set(m.id, fill));
         }
         if (gstyle === 'connectors') {
